@@ -1,9 +1,11 @@
 // src/server.ts
+import 'dotenv/config'; // ✅ Load .env into process.env
+
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { Pool } from 'pg'; // ✅ Now recognized with @types/pg
+import { Pool } from 'pg';
 
 // Routes
 import authRoutes from './routes/auth';

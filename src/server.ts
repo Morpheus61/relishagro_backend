@@ -6,6 +6,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { Pool } from 'pg';
+import faceRecognitionRoutes from './routes/face-recognition';
 
 // Routes
 import authRoutes from './routes/auth';
@@ -30,6 +31,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/harvestflow', harvestFlowRoutes);
 app.use('/api/flavorcore', flavorCoreRoutes);
+app.use('/api/face', faceRecognitionRoutes);
 
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });

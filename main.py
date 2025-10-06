@@ -14,12 +14,24 @@ from config import settings
 import uvicorn
 
 # Create database tables
-Base.metadata.create_all(bind=engine)
+# Database initialization - moved to startup event to avoid blocking
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Create tables
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"Warning: Could not create tables: {e}")
+    yield
+    # Shutdown: cleanup if needed
 
 app = FastAPI(
     title="RelishAgro Backend API",
     description="Production-ready backend for HarvestFlow and FlavorCore management",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan  # Add this
 )
 
 # CORS middleware

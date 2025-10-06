@@ -7,8 +7,8 @@ pydantic-settings==2.1.0
 python-multipart==0.0.6
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-opencv-python-headless==4.8.1.78
-numpy==1.24.3
+opencv-python-headless==4.9.0.80
+numpy==1.26.4
 pillow==10.1.0
 twilio==8.10.0
 requests==2.31.0

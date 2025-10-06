@@ -1,42 +1,42 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+from typing import Optional
 
 class Settings(BaseSettings):
     # Database
     DATABASE_URL: str
     
-    # API
-    API_VERSION: str = "v1"
-    API_PREFIX: str = "/api"
-    
     # Security
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
     
     # Face Recognition
     FACE_RECOGNITION_ENABLED: bool = True
     FACE_CONFIDENCE_THRESHOLD: float = 0.6
     FACE_STORAGE_PATH: str = "storage/faces"
     
-    # GPS Tracking
+    # GPS Configuration
     GPS_GEOFENCE_RADIUS_KM: float = 5.0
-    GPS_TRACKING_INTERVAL_SECONDS: int = 60
+    FARM_LATITUDE: float = 8.430153784606453
+    FARM_LONGITUDE: float = 77.42507404406288
+    PROCESSING_UNIT_LATITUDE: float = 8.097457521754535
+    PROCESSING_UNIT_LONGITUDE: float = 77.550169800994
     
-    # Notifications
-    TWILIO_ACCOUNT_SID: str = ""
-    TWILIO_AUTH_TOKEN: str = ""
-    TWILIO_PHONE_NUMBER: str = ""
-    WHATSAPP_API_KEY: str = ""
+    # Twilio
+    TWILIO_ACCOUNT_SID: Optional[str] = None
+    TWILIO_AUTH_TOKEN: Optional[str] = None
+    TWILIO_PHONE_NUMBER: Optional[str] = None
     
-    # Farm Location (for geofencing)
-    FARM_LATITUDE: float = 8.2833  # Approximate for Kanyakumari
-    FARM_LONGITUDE: float = 77.3167
-    PROCESSING_UNIT_LATITUDE: float = 8.5241
-    PROCESSING_UNIT_LONGITUDE: float = 76.9366
+    # API Configuration
+    API_VERSION: str = "v1"
+    API_PREFIX: str = "/api"
     
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = False
+        # Allow extra fields for Railway compatibility
+        extra = "ignore"
 
 @lru_cache()
 def get_settings():

@@ -1,7 +1,7 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException, APIRouter, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from database import engine, Base
+from database import engine, Base, get_db
 from routes import (
     auth_router,
     attendance_router,
@@ -11,12 +11,17 @@ from routes import (
     gps_router
 )
 from config import settings
-import uvicorn
-
-# Create database tables
-# Database initialization - moved to startup event to avoid blocking
+from models import Lot, FlavorCoreProcessing, QRLabel, RFIDTag, WorkTiming, DailyJobType, PersonRecord
+from utils import require_role
+from pydantic import BaseModel
+from typing import List, Optional
 from contextlib import asynccontextmanager
+from sqlalchemy.orm import Session
+import uvicorn
+import uuid
+from datetime import datetime, date
 
+# Database initialization - moved to startup event to avoid blocking
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Create tables
@@ -31,10 +36,9 @@ app = FastAPI(
     title="RelishAgro Backend API",
     description="Production-ready backend for HarvestFlow and FlavorCore management",
     version="1.0.0",
-    lifespan=lifespan  # Add this
+    lifespan=lifespan
 )
 
-# CORS middleware
 # CORS middleware - UPDATED FOR PRODUCTION
 app.add_middleware(
     CORSMiddleware,
@@ -42,7 +46,7 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:5174",
         "https://relishagro.vercel.app",
-        "https://relishagro-git-*.vercel.app",
+        "https://relishagro-git-main-*.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -62,8 +66,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
-# Health check
-@# Health check endpoints
+# Health check endpoints
 @app.get("/")
 async def root():
     return {
@@ -73,7 +76,7 @@ async def root():
         "endpoints": {
             "health": "/health",
             "docs": "/docs",
-            "api": f"{settings.API_PREFIX}"
+            "api": settings.API_PREFIX
         }
     }
 
@@ -92,17 +95,6 @@ app.include_router(face_router, prefix=settings.API_PREFIX)
 app.include_router(onboarding_router, prefix=settings.API_PREFIX)
 app.include_router(provisions_router, prefix=settings.API_PREFIX)
 app.include_router(gps_router, prefix=settings.API_PREFIX)
-
-# Additional routes for remaining functionality
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from database import get_db
-from models import Lot, FlavorCoreProcessing, QRLabel, RFIDTag, WorkTiming, DailyJobType, PersonRecord
-from utils import require_role
-from pydantic import BaseModel
-from typing import List, Optional
-import uuid
-from datetime import datetime, date
 
 # Lots management router
 lots_router = APIRouter(prefix=f"{settings.API_PREFIX}/lots", tags=["lots"])

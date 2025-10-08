@@ -39,10 +39,10 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",              # Local development
-        "http://localhost:5174",              # Alternative port
-        "https://relishagro.vercel.app",      # Production Vercel
-        "https://relishagro-git-*.vercel.app", # Vercel preview branches
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://relishagro.vercel.app",
+        "https://relishagro-git-*.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -63,6 +63,20 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # Health check
+@# Health check endpoints
+@app.get("/")
+async def root():
+    return {
+        "status": "ok",
+        "message": "RelishAgro Backend API",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/health",
+            "docs": "/docs",
+            "api": f"{settings.API_PREFIX}"
+        }
+    }
+
 @app.get("/health")
 async def health_check():
     return {

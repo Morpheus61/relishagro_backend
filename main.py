@@ -1,10 +1,37 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 import os
 
-# Lifespan context manager
+# Custom CORS middleware for preflight
+class CORSHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        origin = request.headers.get("origin")
+        
+        # Handle preflight
+        if request.method == "OPTIONS":
+            return Response(
+                content="",
+                status_code=200,
+                headers={
+                    "Access-Control-Allow-Origin": origin or "*",
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept",
+                    "Access-Control-Allow-Credentials": "true",
+                    "Access-Control-Max-Age": "3600",
+                }
+            )
+        
+        # Handle actual request
+        response = await call_next(request)
+        if origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response
+
+# Lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🚀 Starting RelishAgro Backend...")
@@ -24,16 +51,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Configuration
+# Add custom CORS middleware FIRST
+app.add_middleware(CORSHeadersMiddleware)
+
+# Then add FastAPI CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "https://relishagro.vercel.app",
-    ],
+    allow_origins=["*"],  # This will be overridden by custom middleware
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -45,7 +71,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"success": False, "error": str(exc)}
     )
 
-# Health endpoints - MUST come before router imports
+# Health endpoints
 @app.get("/")
 async def root():
     return {
@@ -63,7 +89,7 @@ async def health():
         "version": "1.0.0"
     }
 
-# Now import and register routers
+# Import routers
 print("📦 Loading routers...")
 try:
     from config import settings
@@ -84,18 +110,9 @@ try:
     app.include_router(gps_router, prefix=settings.API_PREFIX, tags=["gps"])
     
     print("✅ All routers registered successfully")
-except ImportError as e:
-    print(f"⚠️ Router import warning: {e}")
 except Exception as e:
-    print(f"❌ Router registration error: {e}")
+    print(f"⚠️ Router error: {e}")
 
-# This won't be used by Railway (uses railway.json startCommand)
-# But useful for local development
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=int(os.getenv("PORT", 8080)),  # Use 8080 as default
-        reload=True
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8080)))

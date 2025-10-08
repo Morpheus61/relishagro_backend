@@ -40,18 +40,17 @@ app = FastAPI(
 )
 
 # CORS middleware - UPDATED FOR PRODUCTION
+# CORS middleware - PRODUCTION
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:5174",
         "https://relishagro.vercel.app",
-        "https://relishagro-git-main-*.vercel.app",
     ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Exception handler

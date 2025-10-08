@@ -35,12 +35,19 @@ app = FastAPI(
 )
 
 # CORS middleware
+# CORS middleware - UPDATED FOR PRODUCTION
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production: specify your frontend URL
+    allow_origins=[
+        "http://localhost:5173",              # Local development
+        "http://localhost:5174",              # Alternative port
+        "https://relishagro.vercel.app",      # Production Vercel
+        "https://relishagro-git-*.vercel.app", # Vercel preview branches
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Exception handler

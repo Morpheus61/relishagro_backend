@@ -21,7 +21,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORRECT PRODUCTION CORS — NO TRAILING SPACES
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -60,6 +60,7 @@ async def health():
         "version": "1.0.0"
     }
 
+# Import routers
 # Import routers AFTER middleware
 print("📦 Loading routers...")
 try:
@@ -70,7 +71,9 @@ try:
         face_router,
         onboarding_router,
         provisions_router,
-        gps_router
+        gps_router,
+        workers_router,
+        job_types_router
     )
     
     app.include_router(auth_router, prefix=settings.API_PREFIX, tags=["Authentication"])
@@ -79,8 +82,10 @@ try:
     app.include_router(onboarding_router, prefix=settings.API_PREFIX, tags=["Onboarding"])
     app.include_router(provisions_router, prefix=settings.API_PREFIX, tags=["Provisions"])
     app.include_router(gps_router, prefix=settings.API_PREFIX, tags=["GPS Tracking"])
+    app.include_router(workers_router, prefix=settings.API_PREFIX, tags=["Workers"])
+    app.include_router(job_types_router, prefix=settings.API_PREFIX, tags=["Job Types"])
     
-    print("✅ All routers registered successfully")
+    print("✅ Routers loaded")
 except Exception as e:
     print(f"⚠️ Router error: {e}")
 

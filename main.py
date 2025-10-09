@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
 
@@ -22,36 +23,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CRITICAL: Add middleware BEFORE any routes or imports
-@app.middleware("http")
-async def add_cors_headers(request: Request, call_next):
-    print(f"🔍 CORS Middleware triggered: {request.method} {request.url.path}")  # Debug log
-    
-    # Handle OPTIONS preflight
-    if request.method == "OPTIONS":
-        print("✅ Handling OPTIONS preflight")
-        return Response(
-            status_code=200,
-            headers={
-                "Access-Control-Allow-Origin": "*",  # Changed to wildcard for testing
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-                "Access-Control-Allow-Headers": "*",  # Allow all headers
-                "Access-Control-Allow-Credentials": "true",
-                "Access-Control-Max-Age": "3600",
-            }
-        )
-    
-    # Process request
-    response = await call_next(request)
-    
-    # Add CORS headers to response
-    response.headers["Access-Control-Allow-Origin"] = "*"  # Wildcard for testing
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    
-    print(f"✅ CORS headers added to response")
-    return response
+# CORS Configuration - Use FastAPI's built-in CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://relishagro.vercel.app",
+        "https://relishagro-frontend.vercel.app",  # In case you have multiple domains
+        "http://localhost:3000",  # React dev server
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:8080",  # Local testing
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 # Exception handler
 @app.exception_handler(Exception)
@@ -61,18 +46,19 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={"success": False, "error": str(exc)},
         headers={
-            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Origin": "https://relishagro.vercel.app",
             "Access-Control-Allow-Credentials": "true",
         }
     )
 
-# Health endpoints - Add BEFORE router imports
+# Health endpoints
 @app.get("/")
 async def root():
     return {
         "status": "ok",
         "message": "RelishAgro Backend API",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "cors": "enabled"
     }
 
 @app.get("/health")
@@ -80,15 +66,20 @@ async def health():
     return {
         "status": "healthy",
         "service": "relishagro-backend",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "timestamp": "2025-10-09"
     }
 
 # Test CORS endpoint
 @app.get("/test-cors")
 async def test_cors():
-    return {"message": "If you can see this, CORS is working!", "timestamp": "2025-10-09"}
+    return {
+        "message": "CORS is working correctly!",
+        "timestamp": "2025-10-09",
+        "backend_url": "Railway deployment active"
+    }
 
-# Import routers AFTER middleware and base routes
+# Import routers AFTER middleware setup
 print("📦 Loading routers...")
 try:
     from config import settings
@@ -101,17 +92,29 @@ try:
         gps_router
     )
     
-    app.include_router(auth_router, prefix=settings.API_PREFIX)
-    app.include_router(attendance_router, prefix=settings.API_PREFIX)
-    app.include_router(face_router, prefix=settings.API_PREFIX)
-    app.include_router(onboarding_router, prefix=settings.API_PREFIX)
-    app.include_router(provisions_router, prefix=settings.API_PREFIX)
-    app.include_router(gps_router, prefix=settings.API_PREFIX)
+    # Include routers with API prefix
+    app.include_router(auth_router, prefix=settings.API_PREFIX, tags=["Authentication"])
+    app.include_router(attendance_router, prefix=settings.API_PREFIX, tags=["Attendance"])
+    app.include_router(face_router, prefix=settings.API_PREFIX, tags=["Face Recognition"])
+    app.include_router(onboarding_router, prefix=settings.API_PREFIX, tags=["Onboarding"])
+    app.include_router(provisions_router, prefix=settings.API_PREFIX, tags=["Provisions"])
+    app.include_router(gps_router, prefix=settings.API_PREFIX, tags=["GPS Tracking"])
     
     print("✅ All routers registered successfully")
 except Exception as e:
     print(f"⚠️ Router error: {e}")
 
+# Additional debugging endpoint
+@app.get("/debug/cors")
+async def debug_cors(request: Request):
+    return {
+        "origin": request.headers.get("origin"),
+        "user_agent": request.headers.get("user-agent"),
+        "method": request.method,
+        "url": str(request.url),
+        "headers": dict(request.headers)
+    }
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8080)), reload=True)

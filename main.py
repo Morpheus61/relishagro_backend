@@ -15,25 +15,29 @@ async def lifespan(app: FastAPI):
         print(f"⚠️ Database warning: {e}")
     yield
 
-# Create app WITHOUT any CORS middleware initially
+# Create app
 app = FastAPI(
     title="RelishAgro Backend API",
     version="1.0.0",
     lifespan=lifespan
 )
 
-# Custom middleware to add CORS headers to EVERY response
+# CRITICAL: Add middleware BEFORE any routes or imports
 @app.middleware("http")
 async def add_cors_headers(request: Request, call_next):
+    print(f"🔍 CORS Middleware triggered: {request.method} {request.url.path}")  # Debug log
+    
     # Handle OPTIONS preflight
     if request.method == "OPTIONS":
+        print("✅ Handling OPTIONS preflight")
         return Response(
             status_code=200,
             headers={
-                "Access-Control-Allow-Origin": "https://relishagro.vercel.app",
+                "Access-Control-Allow-Origin": "*",  # Changed to wildcard for testing
                 "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                "Access-Control-Allow-Headers": "*",  # Allow all headers
                 "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Max-Age": "3600",
             }
         )
     
@@ -41,26 +45,28 @@ async def add_cors_headers(request: Request, call_next):
     response = await call_next(request)
     
     # Add CORS headers to response
-    response.headers["Access-Control-Allow-Origin"] = "https://relishagro.vercel.app"
+    response.headers["Access-Control-Allow-Origin"] = "*"  # Wildcard for testing
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Headers"] = "*"
     
+    print(f"✅ CORS headers added to response")
     return response
 
 # Exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    print(f"❌ Exception: {exc}")
     return JSONResponse(
         status_code=500,
         content={"success": False, "error": str(exc)},
         headers={
-            "Access-Control-Allow-Origin": "https://relishagro.vercel.app",
+            "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Credentials": "true",
         }
     )
 
-# Health endpoints
+# Health endpoints - Add BEFORE router imports
 @app.get("/")
 async def root():
     return {
@@ -77,7 +83,12 @@ async def health():
         "version": "1.0.0"
     }
 
-# Import routers
+# Test CORS endpoint
+@app.get("/test-cors")
+async def test_cors():
+    return {"message": "If you can see this, CORS is working!", "timestamp": "2025-10-09"}
+
+# Import routers AFTER middleware and base routes
 print("📦 Loading routers...")
 try:
     from config import settings

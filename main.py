@@ -21,11 +21,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Configuration
+# CORS Configuration — REMOVED TRAILING SPACE
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://relishagro.vercel.app",
+        "https://relishagro.vercel.app",  # ✅ No trailing spaces
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:8080",
@@ -60,7 +60,6 @@ async def health():
         "version": "1.0.0"
     }
 
-# Import routers
 # Import routers AFTER middleware
 print("📦 Loading routers...")
 try:

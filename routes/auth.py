@@ -5,7 +5,7 @@ from models import PersonRecord
 from pydantic import BaseModel
 from typing import Optional
 
-router = APIRouter(tags=["authentication"])  # ✅ Removed prefix="/auth"
+router = APIRouter(tags=["authentication"])
 
 class LoginRequest(BaseModel):
     staff_id: str
@@ -15,7 +15,7 @@ class LoginResponse(BaseModel):
     user: Optional[dict] = None
     token: str
 
-@router.post("/auth/login", response_model=LoginResponse)  # ✅ Added /auth here
+@router.post("/auth/login", response_model=LoginResponse)
 async def login(request: LoginRequest, db: Session = Depends(get_db)):
     if not request.staff_id or not request.staff_id.strip():
         raise HTTPException(

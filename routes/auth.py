@@ -5,7 +5,7 @@ from models import PersonRecord
 from pydantic import BaseModel
 from typing import Optional
 
-router = APIRouter(tags=["authentication"])
+router = APIRouter(prefix="/auth", tags=["authentication"])  # Add prefix here
 
 class LoginRequest(BaseModel):
     staff_id: str

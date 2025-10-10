@@ -21,7 +21,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Configuration — REMOVED TRAILING SPACE
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

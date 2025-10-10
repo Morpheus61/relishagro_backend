@@ -2,11 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
 from models import PersonRecord
-from utils import get_current_user
 from pydantic import BaseModel
 from typing import Optional
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(tags=["authentication"])  # ✅ Removed prefix="/auth"
 
 class LoginRequest(BaseModel):
     staff_id: str
@@ -16,19 +15,14 @@ class LoginResponse(BaseModel):
     user: Optional[dict] = None
     token: str
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/auth/login", response_model=LoginResponse)  # ✅ Added /auth here
 async def login(request: LoginRequest, db: Session = Depends(get_db)):
-    """
-    Authenticate user by staff_id.
-    Production: Add password validation, JWT generation.
-    """
     if not request.staff_id or not request.staff_id.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Staff ID is required"
         )
     
-    # Query person record
     user = db.query(PersonRecord).filter(
         PersonRecord.staff_id == request.staff_id.strip()
     ).first()
@@ -45,7 +39,6 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
             detail="Account is not active"
         )
     
-    # Determine role display name
     role_display = {
         "admin": "Administrator",
         "harvestflow_manager": "HarvestFlow Manager",
@@ -55,8 +48,6 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         "driver": "Driver"
     }.get(user.person_type, user.person_type)
     
-    # In production: Generate JWT token with expiry
-    # For now: use staff_id as token (simplified)
     token = user.staff_id
     
     return LoginResponse(
@@ -72,13 +63,8 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         token=token
     )
 
-@router.get("/me")
-async def get_current_user_info(
-    current_user: PersonRecord = Depends(get_current_user)
-):
-    """Get current authenticated user information"""
-    from utils import get_current_user
-    
+@router.get("/auth/me")
+async def get_current_user_info(current_user: PersonRecord = Depends(get_current_user)):
     return {
         "id": str(current_user.id),
         "staff_id": current_user.staff_id,

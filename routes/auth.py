@@ -15,7 +15,7 @@ class LoginResponse(BaseModel):
     user: Optional[dict] = None
     token: str
 
-@router.post("/login", response_model=LoginResponse)  # ✅ Removed extra /auth
+@router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest, db: Session = Depends(get_db)):
     if not request.staff_id or not request.staff_id.strip():
         raise HTTPException(
@@ -62,14 +62,3 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         },
         token=token
     )
-
-@router.get("/me")
-async def get_current_user_info(current_user: PersonRecord = Depends(get_current_user)):
-    return {
-        "id": str(current_user.id),
-        "staff_id": current_user.staff_id,
-        "full_name": current_user.full_name,
-        "role": current_user.person_type,
-        "designation": current_user.designation,
-        "contact_number": current_user.contact_number
-    }

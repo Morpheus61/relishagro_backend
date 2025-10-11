@@ -16,3 +16,4 @@ asyncpg==0.29.0
 aiofiles==23.2.1
 python-dotenv==1.0.0
 gunicorn==21.2.0
+supabase>=2.0.0

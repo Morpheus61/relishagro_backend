@@ -88,6 +88,13 @@ try:
 except Exception as e:
     print(f"⚠️ Router error: {e}")
 
+# Add this after your router includes in main.py
+print("🔍 Registered routes:")
+for route in app.routes:
+    if hasattr(route, 'methods'):
+        print(f"  {route.methods} {route.path}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8080)), reload=False)

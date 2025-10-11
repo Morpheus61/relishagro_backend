@@ -21,11 +21,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Configuration
+# CORS Configuration — FIXED: Removed trailing spaces
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://relishagro.vercel.app",  # ✅ No trailing spaces
+        "https://relishagro.vercel.app",  # ✅ NO TRAILING SPACES
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:8080",
@@ -60,40 +60,79 @@ async def health():
         "version": "1.0.0"
     }
 
-# Import routers AFTER middleware
+# Import routers with individual error handling
 print("📦 Loading routers...")
+
+# Auth router (critical - load first)
 try:
     from config import settings
-    from routes import (
-        auth_router,
-        attendance_router,
-        face_router,
-        onboarding_router,
-        provisions_router,
-        gps_router,
-        workers_router,
-        job_types_router
-    )
-    
+    from routes import auth_router
     app.include_router(auth_router, prefix=settings.API_PREFIX, tags=["Authentication"])
-    app.include_router(attendance_router, prefix=settings.API_PREFIX, tags=["Attendance"])
-    app.include_router(face_router, prefix=settings.API_PREFIX, tags=["Face Recognition"])
-    app.include_router(onboarding_router, prefix=settings.API_PREFIX, tags=["Onboarding"])
-    app.include_router(provisions_router, prefix=settings.API_PREFIX, tags=["Provisions"])
-    app.include_router(gps_router, prefix=settings.API_PREFIX, tags=["GPS Tracking"])
-    app.include_router(workers_router, prefix=settings.API_PREFIX, tags=["Workers"])
-    app.include_router(job_types_router, prefix=settings.API_PREFIX, tags=["Job Types"])
-    
-    print("✅ Routers loaded")
+    print("✅ Auth router loaded")
 except Exception as e:
-    print(f"⚠️ Router error: {e}")
+    print(f"⚠️ Auth router error: {e}")
 
-# Add this after your router includes in main.py
+# Attendance router
+try:
+    from routes import attendance_router
+    app.include_router(attendance_router, prefix=settings.API_PREFIX, tags=["Attendance"])
+    print("✅ Attendance router loaded")
+except Exception as e:
+    print(f"⚠️ Attendance router error: {e}")
+
+# Face Recognition router
+try:
+    from routes import face_router
+    app.include_router(face_router, prefix=settings.API_PREFIX, tags=["Face Recognition"])
+    print("✅ Face Recognition router loaded")
+except Exception as e:
+    print(f"⚠️ Face Recognition router error: {e}")
+
+# Onboarding router
+try:
+    from routes import onboarding_router
+    app.include_router(onboarding_router, prefix=settings.API_PREFIX, tags=["Onboarding"])
+    print("✅ Onboarding router loaded")
+except Exception as e:
+    print(f"⚠️ Onboarding router error: {e}")
+
+# Provisions router
+try:
+    from routes import provisions_router
+    app.include_router(provisions_router, prefix=settings.API_PREFIX, tags=["Provisions"])
+    print("✅ Provisions router loaded")
+except Exception as e:
+    print(f"⚠️ Provisions router error: {e}")
+
+# GPS Tracking router
+try:
+    from routes import gps_router
+    app.include_router(gps_router, prefix=settings.API_PREFIX, tags=["GPS Tracking"])
+    print("✅ GPS Tracking router loaded")
+except Exception as e:
+    print(f"⚠️ GPS Tracking router error: {e}")
+
+# Workers router
+try:
+    from routes import workers_router
+    app.include_router(workers_router, prefix=settings.API_PREFIX, tags=["Workers"])
+    print("✅ Workers router loaded")
+except Exception as e:
+    print(f"⚠️ Workers router error: {e}")
+
+# Job Types router
+try:
+    from routes import job_types_router
+    app.include_router(job_types_router, prefix=settings.API_PREFIX, tags=["Job Types"])
+    print("✅ Job Types router loaded")
+except Exception as e:
+    print(f"⚠️ Job Types router error: {e}")
+
+# Debug: Print all registered routes
 print("🔍 Registered routes:")
 for route in app.routes:
     if hasattr(route, 'methods'):
         print(f"  {route.methods} {route.path}")
-
 
 if __name__ == "__main__":
     import uvicorn

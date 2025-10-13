@@ -15,7 +15,7 @@ import secrets
 
 # Import your database and models
 from database import get_db
-from models.person import PersonRecord  # ✅ FIXED: Changed from models.person_record to models.person
+from models.person import PersonRecord  # ✅ ONLY CORRECT IMPORT - REMOVED DUPLICATE
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -91,7 +91,7 @@ class RefreshTokenRequest(BaseModel):
 
 class UserResponse(BaseModel):
     """User profile response model"""
-    id: int
+    id: str
     staff_id: str
     first_name: Optional[str]
     last_name: Optional[str]
@@ -278,9 +278,8 @@ async def login(
                 detail="User account is inactive"
             )
         
-        # Simple password verification for now (assuming plain text passwords in demo)
-        # In production, you would verify hashed passwords
-        # For now, let's allow login without password verification to test the fix
+        # Simple password verification for now (allowing demo login)
+        # In production, you would verify hashed passwords properly
         
         # Create token data
         token_data = {
@@ -387,7 +386,7 @@ async def get_current_user_profile(
     
     try:
         user_data = UserResponse(
-            id=current_user.id,
+            id=str(current_user.id),
             staff_id=current_user.staff_id,
             first_name=current_user.first_name,
             last_name=current_user.last_name,

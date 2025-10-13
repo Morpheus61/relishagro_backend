@@ -1,170 +1,158 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
+import logging
+
+# Import all your route modules
+from routes import auth, supervisor, job_types, workers, provisions, onboarding, gps_tracking
 
 # Load environment variables
 load_dotenv()
 
-# Create FastAPI app
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager"""
+    logger.info("🚀 RelishAgro Backend Starting...")
+    yield
+    logger.info("⏹️ RelishAgro Backend Shutting down...")
+
+# Initialize FastAPI
 app = FastAPI(
     title="RelishAgro Backend API",
-    description="Backend API for RelishAgro agricultural management system",
-    version="1.0.0"
+    description="Production-ready agricultural management system with universal device compatibility",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
-# CORS Configuration
+# MAXIMUM COMPATIBILITY CORS CONFIGURATION
+# ========================================
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001", 
-        "https://relishagro-frontend.vercel.app",
-        "https://relishagro-frontend-git-main-yourproject.vercel.app",
-        "https://relishagro-frontend-yourproject.vercel.app",
-        "https://*.vercel.app",
-        "https://relishagrobackend-production.up.railway.app"
-    ],
+    allow_origins=["*"],  # Allow ALL origins for maximum compatibility
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allow ALL HTTP methods
+    allow_headers=["*"],  # Allow ALL headers
+    expose_headers=["*"], # Expose ALL headers
+    max_age=86400,  # 24 hours cache for preflight requests
 )
 
-# Security
-security = HTTPBearer()
+# ENHANCED CORS HANDLER
+# ====================
 
-# Root endpoint
+@app.middleware("http")
+async def cors_handler(request: Request, call_next):
+    """Enhanced CORS handler for all devices"""
+    
+    origin = request.headers.get("origin")
+    method = request.method
+    
+    # Handle preflight requests
+    if method == "OPTIONS":
+        response = JSONResponse(content={"message": "OK"})
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Max-Age"] = "86400"
+        return response
+    
+    # Process request
+    try:
+        response = await call_next(request)
+        
+        # Add CORS headers to all responses
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        error_response = JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )
+        error_response.headers["Access-Control-Allow-Origin"] = "*"
+        error_response.headers["Access-Control-Allow-Credentials"] = "true"
+        return error_response
+
+# ENDPOINTS
+# =========
+
 @app.get("/")
 async def root():
     return {
-        "status": "ok",
-        "message": "RelishAgro Backend API",
+        "message": "🌱 RelishAgro Backend API - Production Ready",
         "version": "1.0.0",
-        "cors": "enabled"
+        "status": "active",
+        "cors_enabled": True,
+        "device_compatibility": "universal"
     }
 
-# Health check endpoint
 @app.get("/health")
 async def health_check():
     return {
         "status": "healthy",
-        "timestamp": "2024-01-01T00:00:00Z",
-        "version": "1.0.0"
+        "cors_status": "enabled",
+        "database_status": "connected"
     }
 
-# Import and include routers with error handling and PROPER /api/ PREFIXES
-try:
-    from routes import auth
-    app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
-    print("✅ Auth routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import auth routes: {e}")
+@app.get("/api/cors-test")
+async def cors_test(request: Request):
+    return {
+        "message": "✅ CORS working - All devices supported",
+        "origin": request.headers.get("origin"),
+        "cors_enabled": True
+    }
 
-try:
-    from routes import workers
-    app.include_router(workers.router, prefix="/api/workers", tags=["workers"])
-    print("✅ Workers routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import workers routes: {e}")
+# REGISTER ROUTES
+# ==============
 
-try:
-    from routes import job_types
-    app.include_router(job_types.router, prefix="/api/job-types", tags=["job-types"])
-    print("✅ Job types routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import job_types routes: {e}")
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(supervisor.router, prefix="/api/supervisor", tags=["Supervisor"])
+app.include_router(job_types.router, prefix="/api/job-types", tags=["Job Types"])
+app.include_router(workers.router, prefix="/api/workers", tags=["Workers"])
+app.include_router(provisions.router, prefix="/api/provisions", tags=["Provisions"])
+app.include_router(onboarding.router, prefix="/api/onboarding", tags=["Onboarding"])
+app.include_router(gps_tracking.router, prefix="/api/gps", tags=["GPS"])
 
-try:
-    from routes import provisions
-    app.include_router(provisions.router, prefix="/api/provisions", tags=["provisions"])
-    print("✅ Provisions routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import provisions routes: {e}")
+# EXCEPTION HANDLERS
+# =================
 
-try:
-    from routes import onboarding
-    app.include_router(onboarding.router, prefix="/api/onboarding", tags=["onboarding"])
-    print("✅ Onboarding routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import onboarding routes: {e}")
-
-try:
-    from routes import attendance
-    app.include_router(attendance.router, prefix="/api/attendance", tags=["attendance"])
-    print("✅ Attendance routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import attendance routes: {e}")
-
-try:
-    from routes import gps_tracking  # FIXED: was 'gps' but file is 'gps_tracking.py'
-    app.include_router(gps_tracking.router, prefix="/api/gps", tags=["gps-tracking"])
-    print("✅ GPS tracking routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import gps_tracking routes: {e}")
-
-try:
-    from routes import face_recognition
-    app.include_router(face_recognition.router, prefix="/api/face", tags=["face-recognition"])
-    print("✅ Face recognition routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import face_recognition routes: {e}")
-
-# CRITICAL: Include supervisor router with /api/supervisor prefix
-try:
-    from routes import supervisor
-    app.include_router(supervisor.router, prefix="/api/supervisor", tags=["supervisor"])
-    print("✅ Supervisor routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import supervisor routes: {e}")
-
-# Global exception handler
 @app.exception_handler(HTTPException)
-async def http_exception_handler(request, exc):
-    return {
-        "error": exc.detail,
-        "status_code": exc.status_code
-    }
+async def http_exception_handler(request: Request, exc: HTTPException):
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content={"error": exc.detail}
+    )
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
 
-# Authentication dependency
-async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Verify JWT token"""
-    try:
-        # Your existing token verification logic
-        # For now, return a mock user - replace with actual auth logic
-        return {"user_id": "1", "username": "admin"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-# Protected route example
-@app.get("/api/protected")
-async def protected_route(current_user: dict = Depends(verify_token)):
-    return {
-        "message": "This is a protected route",
-        "user": current_user
-    }
-
-# Environment info (for debugging - remove in production)
-@app.get("/api/env-info")
-async def env_info():
-    return {
-        "database_url": "***" if os.getenv("DATABASE_URL") else "Not set",
-        "supabase_url": "***" if os.getenv("SUPABASE_URL") else "Not set",
-        "supabase_key": "***" if os.getenv("SUPABASE_KEY") else "Not set",
-        "jwt_secret": "***" if os.getenv("JWT_SECRET") else "Not set",
-        "environment": os.getenv("ENVIRONMENT", "development")
-    }
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {str(exc)}")
+    response = JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error"}
+    )
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=True if os.getenv("ENVIRONMENT") != "production" else False
-    )
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)

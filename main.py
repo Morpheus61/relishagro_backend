@@ -1,48 +1,59 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from contextlib import asynccontextmanager
 import os
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
+# Import all your existing routes
+from routes import auth, workers, job_types, provisions, onboarding, gps
+from routes import supervisor  # NEW: Import supervisor routes
+
+# Import your existing core modules
+from core.database import init_db
+from core.auth import get_current_user
+
+# Lifespan manager for startup/shutdown events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("🚀 Starting RelishAgro Backend...")
-    try:
-        from database import engine, Base
-        Base.metadata.create_all(bind=engine)
-        print("✅ Database initialized")
-    except Exception as e:
-        print(f"⚠️ Database warning: {e}")
+    # Startup
+    await init_db()
     yield
+    # Shutdown
+    pass
 
+# Create FastAPI app with lifespan
 app = FastAPI(
     title="RelishAgro Backend API",
+    description="Backend API for RelishAgro agricultural management system",
     version="1.0.0",
     lifespan=lifespan
 )
 
-# CORS Configuration — FIXED: Removed trailing spaces
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://relishagro.vercel.app",  # ✅ NO TRAILING SPACES
         "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:8080",
+        "http://localhost:3001", 
+        "https://relishagro-frontend.vercel.app",
+        "https://relishagro-frontend-git-main-yourproject.vercel.app",
+        "https://relishagro-frontend-yourproject.vercel.app",
+        "https://*.vercel.app",
+        "https://relishagrobackend-production.up.railway.app"
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    print(f"❌ Exception: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content={"success": False, "error": str(exc)}
-    )
+# Security
+security = HTTPBearer()
 
+# Root endpoint
 @app.get("/")
 async def root():
     return {
@@ -52,88 +63,72 @@ async def root():
         "cors": "enabled"
     }
 
+# Health check endpoint
 @app.get("/health")
-async def health():
+async def health_check():
     return {
         "status": "healthy",
-        "service": "relishagro-backend",
+        "timestamp": "2024-01-01T00:00:00Z",
         "version": "1.0.0"
     }
 
-# Import routers with individual error handling
-print("📦 Loading routers...")
+# Include all existing routers
+app.include_router(auth.router)
+app.include_router(workers.router)
+app.include_router(job_types.router)
+app.include_router(provisions.router)
+app.include_router(onboarding.router)
+app.include_router(gps.router)
 
-# Auth router (critical - load first)
-try:
-    from config import settings
-    from routes import auth_router
-    app.include_router(auth_router, prefix=settings.API_PREFIX, tags=["Authentication"])
-    print("✅ Auth router loaded")
-except Exception as e:
-    print(f"⚠️ Auth router error: {e}")
+# NEW: Include supervisor router
+app.include_router(supervisor.router)
 
-# Attendance router
-try:
-    from routes import attendance_router
-    app.include_router(attendance_router, prefix=settings.API_PREFIX, tags=["Attendance"])
-    print("✅ Attendance router loaded")
-except Exception as e:
-    print(f"⚠️ Attendance router error: {e}")
+# Global exception handler
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    return {
+        "error": exc.detail,
+        "status_code": exc.status_code
+    }
 
-# Face Recognition router
-try:
-    from routes import face_router
-    app.include_router(face_router, prefix=settings.API_PREFIX, tags=["Face Recognition"])
-    print("✅ Face Recognition router loaded")
-except Exception as e:
-    print(f"⚠️ Face Recognition router error: {e}")
+# Authentication dependency
+async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Verify JWT token"""
+    try:
+        # Your existing token verification logic
+        return await get_current_user(credentials.credentials)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-# Onboarding router
-try:
-    from routes import onboarding_router
-    app.include_router(onboarding_router, prefix=settings.API_PREFIX, tags=["Onboarding"])
-    print("✅ Onboarding router loaded")
-except Exception as e:
-    print(f"⚠️ Onboarding router error: {e}")
+# Protected route example
+@app.get("/api/protected")
+async def protected_route(current_user: dict = Depends(verify_token)):
+    return {
+        "message": "This is a protected route",
+        "user": current_user
+    }
 
-# Provisions router
-try:
-    from routes import provisions_router
-    app.include_router(provisions_router, prefix=settings.API_PREFIX, tags=["Provisions"])
-    print("✅ Provisions router loaded")
-except Exception as e:
-    print(f"⚠️ Provisions router error: {e}")
-
-# GPS Tracking router
-try:
-    from routes import gps_router
-    app.include_router(gps_router, prefix=settings.API_PREFIX, tags=["GPS Tracking"])
-    print("✅ GPS Tracking router loaded")
-except Exception as e:
-    print(f"⚠️ GPS Tracking router error: {e}")
-
-# Workers router
-try:
-    from routes import workers_router
-    app.include_router(workers_router, prefix=settings.API_PREFIX, tags=["Workers"])
-    print("✅ Workers router loaded")
-except Exception as e:
-    print(f"⚠️ Workers router error: {e}")
-
-# Job Types router
-try:
-    from routes import job_types_router
-    app.include_router(job_types_router, prefix=settings.API_PREFIX, tags=["Job Types"])
-    print("✅ Job Types router loaded")
-except Exception as e:
-    print(f"⚠️ Job Types router error: {e}")
-
-# Debug: Print all registered routes
-print("🔍 Registered routes:")
-for route in app.routes:
-    if hasattr(route, 'methods'):
-        print(f"  {route.methods} {route.path}")
+# Environment info (for debugging - remove in production)
+@app.get("/api/env-info")
+async def env_info():
+    return {
+        "database_url": "***" if os.getenv("DATABASE_URL") else "Not set",
+        "supabase_url": "***" if os.getenv("SUPABASE_URL") else "Not set",
+        "supabase_key": "***" if os.getenv("SUPABASE_KEY") else "Not set",
+        "jwt_secret": "***" if os.getenv("JWT_SECRET") else "Not set",
+        "environment": os.getenv("ENVIRONMENT", "development")
+    }
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8080)), reload=False)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port,
+        reload=True if os.getenv("ENVIRONMENT") != "production" else False
+    )

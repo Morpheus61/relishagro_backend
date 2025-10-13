@@ -14,21 +14,32 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS Configuration
+# CORS Configuration - FIXED WITH CORRECT DOMAIN
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:3001", 
-        "https://relishagro-frontend.vercel.app",
-        "https://relishagro-frontend-git-main-yourproject.vercel.app",
-        "https://relishagro-frontend-yourproject.vercel.app",
-        "https://*.vercel.app",
-        "https://relishagrobackend-production.up.railway.app"
+        "http://localhost:5173",  # Vite dev server
+        "https://relishagro.vercel.app",  # ✅ CORRECT: Your actual frontend domain
+        "https://relishagro-*.vercel.app",  # Pattern for preview deployments
+        "https://*.vercel.app",  # Wildcard for Vercel domains
+        "https://relishagrobackend-production.up.railway.app"  # Your backend
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=[
+        "Accept",
+        "Accept-Language", 
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "X-CSRFToken",
+        "User-Agent",
+        "Referer",
+        "Origin"
+    ],
 )
 
 # Security
@@ -41,7 +52,8 @@ async def root():
         "status": "ok",
         "message": "RelishAgro Backend API",
         "version": "1.0.0",
-        "cors": "enabled"
+        "cors": "enabled",
+        "frontend_url": "https://relishagro.vercel.app"
     }
 
 # Health check endpoint
@@ -50,7 +62,19 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": "2024-01-01T00:00:00Z",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "cors_enabled": True
+    }
+
+# CORS test endpoint
+@app.get("/api/cors-test")
+async def cors_test():
+    return {
+        "message": "CORS is working!",
+        "allowed_origins": [
+            "https://relishagro.vercel.app",
+            "http://localhost:3000"
+        ]
     }
 
 # Import and include routers with error handling and PROPER /api/ PREFIXES
@@ -122,7 +146,8 @@ except ImportError as e:
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
     return {
-        "error": exc.detail,
+        "status": "error",
+        "message": exc.detail,
         "status_code": exc.status_code
     }
 

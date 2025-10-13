@@ -53,47 +53,68 @@ async def health_check():
         "version": "1.0.0"
     }
 
-# Import and include routers with error handling
+# Import and include routers with error handling and PROPER /api/ PREFIXES
 try:
     from routes import auth
-    app.include_router(auth.router)
+    app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
+    print("✅ Auth routes loaded successfully")
 except ImportError as e:
     print(f"Warning: Could not import auth routes: {e}")
 
 try:
     from routes import workers
-    app.include_router(workers.router)
+    app.include_router(workers.router, prefix="/api/workers", tags=["workers"])
+    print("✅ Workers routes loaded successfully")
 except ImportError as e:
     print(f"Warning: Could not import workers routes: {e}")
 
 try:
     from routes import job_types
-    app.include_router(job_types.router)
+    app.include_router(job_types.router, prefix="/api/job-types", tags=["job-types"])
+    print("✅ Job types routes loaded successfully")
 except ImportError as e:
     print(f"Warning: Could not import job_types routes: {e}")
 
 try:
     from routes import provisions
-    app.include_router(provisions.router)
+    app.include_router(provisions.router, prefix="/api/provisions", tags=["provisions"])
+    print("✅ Provisions routes loaded successfully")
 except ImportError as e:
     print(f"Warning: Could not import provisions routes: {e}")
 
 try:
     from routes import onboarding
-    app.include_router(onboarding.router)
+    app.include_router(onboarding.router, prefix="/api/onboarding", tags=["onboarding"])
+    print("✅ Onboarding routes loaded successfully")
 except ImportError as e:
     print(f"Warning: Could not import onboarding routes: {e}")
 
 try:
-    from routes import gps
-    app.include_router(gps.router)
+    from routes import attendance
+    app.include_router(attendance.router, prefix="/api/attendance", tags=["attendance"])
+    print("✅ Attendance routes loaded successfully")
 except ImportError as e:
-    print(f"Warning: Could not import gps routes: {e}")
+    print(f"Warning: Could not import attendance routes: {e}")
 
-# NEW: Include supervisor router
+try:
+    from routes import gps_tracking  # FIXED: was 'gps' but file is 'gps_tracking.py'
+    app.include_router(gps_tracking.router, prefix="/api/gps", tags=["gps-tracking"])
+    print("✅ GPS tracking routes loaded successfully")
+except ImportError as e:
+    print(f"Warning: Could not import gps_tracking routes: {e}")
+
+try:
+    from routes import face_recognition
+    app.include_router(face_recognition.router, prefix="/api/face", tags=["face-recognition"])
+    print("✅ Face recognition routes loaded successfully")
+except ImportError as e:
+    print(f"Warning: Could not import face_recognition routes: {e}")
+
+# CRITICAL: Include supervisor router with /api/supervisor prefix
 try:
     from routes import supervisor
-    app.include_router(supervisor.router)
+    app.include_router(supervisor.router, prefix="/api/supervisor", tags=["supervisor"])
+    print("✅ Supervisor routes loaded successfully")
 except ImportError as e:
     print(f"Warning: Could not import supervisor routes: {e}")
 

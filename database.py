@@ -5,6 +5,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Generator
+import asyncpg
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +38,26 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Create Base class for models
 Base = declarative_base()
 
+# Supabase client for routes that need it
+try:
+    from supabase import create_client, Client
+    
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    
+    if SUPABASE_URL and SUPABASE_KEY:
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        logger.info("✅ Supabase client initialized")
+    else:
+        logger.warning("⚠️ Supabase credentials not found, client not initialized")
+        supabase = None
+except ImportError:
+    logger.warning("⚠️ Supabase library not installed")
+    supabase = None
+except Exception as e:
+    logger.error(f"❌ Failed to initialize Supabase client: {str(e)}")
+    supabase = None
+
 def get_db() -> Generator[Session, None, None]:
     """
     Database dependency for FastAPI dependency injection.
@@ -58,6 +79,17 @@ def get_db() -> Generator[Session, None, None]:
         raise
     finally:
         db.close()
+
+async def get_db_connection():
+    """
+    Get raw database connection for complex queries
+    """
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        return conn
+    except Exception as e:
+        logger.error(f"Failed to create database connection: {str(e)}")
+        raise
 
 def test_connection() -> bool:
     """
@@ -82,7 +114,7 @@ def init_db():
     """
     try:
         # Import all models here to ensure they are registered with Base
-        from models.person_record import PersonRecord
+        from models.person import PersonRecord
         
         # Create all tables
         Base.metadata.create_all(bind=engine)

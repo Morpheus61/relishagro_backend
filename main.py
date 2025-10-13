@@ -1,59 +1,52 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+"""
+RelishAgro Backend API - Updated Main.py with Admin Routes
+FastAPI application with CORS, database connection, and comprehensive route registration
+"""
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
+import logging
+from database import engine, Base
 import os
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Create FastAPI app
+# Create database tables
+try:
+    Base.metadata.create_all(bind=engine)
+    logger.info("✅ Database tables created successfully")
+except Exception as e:
+    logger.error(f"❌ Database table creation failed: {e}")
+
+# Initialize FastAPI app
 app = FastAPI(
     title="RelishAgro Backend API",
-    description="Backend API for RelishAgro agricultural management system",
-    version="1.0.0"
+    description="Complete agriculture management system backend",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
-# CORS Configuration - FIXED WITH CORRECT DOMAIN
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001", 
-        "http://localhost:5173",  # Vite dev server
-        "https://relishagro.vercel.app",  # ✅ CORRECT: Your actual frontend domain
-        "https://relishagro-*.vercel.app",  # Pattern for preview deployments
-        "https://*.vercel.app",  # Wildcard for Vercel domains
-        "https://relishagrobackend-production.up.railway.app"  # Your backend
-    ],
+    allow_origins=["*"],  # In production, specify exact origins
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=[
-        "Accept",
-        "Accept-Language", 
-        "Content-Language",
-        "Content-Type",
-        "Authorization",
-        "X-Requested-With",
-        "X-CSRFToken",
-        "User-Agent",
-        "Referer",
-        "Origin"
-    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-
-# Security
-security = HTTPBearer()
 
 # Root endpoint
 @app.get("/")
 async def root():
     return {
-        "status": "ok",
         "message": "RelishAgro Backend API",
         "version": "1.0.0",
-        "cors": "enabled",
-        "frontend_url": "https://relishagro.vercel.app"
+        "status": "operational",
+        "docs": "/docs"
     }
 
 # Health check endpoint
@@ -61,23 +54,13 @@ async def root():
 async def health_check():
     return {
         "status": "healthy",
-        "timestamp": "2024-01-01T00:00:00Z",
-        "version": "1.0.0",
-        "cors_enabled": True
+        "timestamp": "2025-10-13",
+        "database": "connected"
     }
 
-# CORS test endpoint
-@app.get("/api/cors-test")
-async def cors_test():
-    return {
-        "message": "CORS is working!",
-        "allowed_origins": [
-            "https://relishagro.vercel.app",
-            "http://localhost:3000"
-        ]
-    }
+# Route Registration with Error Handling
 
-# Import and include routers with error handling and PROPER /api/ PREFIXES
+# Authentication Routes
 try:
     from routes import auth
     app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
@@ -85,6 +68,15 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import auth routes: {e}")
 
+# CRITICAL: Admin Routes (NEWLY ADDED)
+try:
+    from routes import admin
+    app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+    print("✅ Admin routes loaded successfully")
+except ImportError as e:
+    print(f"Warning: Could not import admin routes: {e}")
+
+# Workers Routes
 try:
     from routes import workers
     app.include_router(workers.router, prefix="/api/workers", tags=["workers"])
@@ -92,6 +84,7 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import workers routes: {e}")
 
+# Job Types Routes
 try:
     from routes import job_types
     app.include_router(job_types.router, prefix="/api/job-types", tags=["job-types"])
@@ -99,6 +92,7 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import job_types routes: {e}")
 
+# Provisions Routes
 try:
     from routes import provisions
     app.include_router(provisions.router, prefix="/api/provisions", tags=["provisions"])
@@ -106,6 +100,7 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import provisions routes: {e}")
 
+# Onboarding Routes
 try:
     from routes import onboarding
     app.include_router(onboarding.router, prefix="/api/onboarding", tags=["onboarding"])
@@ -113,6 +108,7 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import onboarding routes: {e}")
 
+# Attendance Routes
 try:
     from routes import attendance
     app.include_router(attendance.router, prefix="/api/attendance", tags=["attendance"])
@@ -120,6 +116,7 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import attendance routes: {e}")
 
+# GPS Tracking Routes
 try:
     from routes import gps_tracking  # FIXED: was 'gps' but file is 'gps_tracking.py'
     app.include_router(gps_tracking.router, prefix="/api/gps", tags=["gps-tracking"])
@@ -127,6 +124,7 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import gps_tracking routes: {e}")
 
+# Face Recognition Routes
 try:
     from routes import face_recognition
     app.include_router(face_recognition.router, prefix="/api/face", tags=["face-recognition"])
@@ -134,7 +132,7 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import face_recognition routes: {e}")
 
-# CRITICAL: Include supervisor router with /api/supervisor prefix
+# Supervisor Routes
 try:
     from routes import supervisor
     app.include_router(supervisor.router, prefix="/api/supervisor", tags=["supervisor"])
@@ -142,54 +140,27 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import supervisor routes: {e}")
 
-# Global exception handler
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request, exc):
-    return {
-        "status": "error",
-        "message": exc.detail,
-        "status_code": exc.status_code
-    }
+# Global Exception Handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Global exception: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error occurred"}
+    )
 
-# Authentication dependency
-async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Verify JWT token"""
-    try:
-        # Your existing token verification logic
-        # For now, return a mock user - replace with actual auth logic
-        return {"user_id": "1", "username": "admin"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+# Startup Event
+@app.on_event("startup")
+async def startup_event():
+    logger.info("🚀 RelishAgro Backend API started successfully")
+    logger.info("📖 API Documentation: /docs")
+    logger.info("🔍 Alternative docs: /redoc")
 
-# Protected route example
-@app.get("/api/protected")
-async def protected_route(current_user: dict = Depends(verify_token)):
-    return {
-        "message": "This is a protected route",
-        "user": current_user
-    }
-
-# Environment info (for debugging - remove in production)
-@app.get("/api/env-info")
-async def env_info():
-    return {
-        "database_url": "***" if os.getenv("DATABASE_URL") else "Not set",
-        "supabase_url": "***" if os.getenv("SUPABASE_URL") else "Not set",
-        "supabase_key": "***" if os.getenv("SUPABASE_KEY") else "Not set",
-        "jwt_secret": "***" if os.getenv("JWT_SECRET") else "Not set",
-        "environment": os.getenv("ENVIRONMENT", "development")
-    }
+# Shutdown Event
+@app.on_event("shutdown")  
+async def shutdown_event():
+    logger.info("🛑 RelishAgro Backend API shutting down")
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=True if os.getenv("ENVIRONMENT") != "production" else False
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8000)

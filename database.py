@@ -24,7 +24,7 @@ try:
         max_overflow=20,
         pool_pre_ping=True,
         pool_recycle=300,
-        echo=False  # Set to True for SQL debugging
+        echo=False
     )
     logger.info("✅ SQLAlchemy engine initialized")
 except Exception as e:

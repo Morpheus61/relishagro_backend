@@ -1,6 +1,6 @@
 """
-RelishAgro Backend - Admin Routes
-Complete admin functionality for user management, statistics, and system administration
+RelishAgro Backend - Admin Routes (FIXED IMPORTS)
+Complete admin functionality with correct model imports
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status
@@ -8,7 +8,7 @@ from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func, and_, or_
 from database import get_db
-from models.person_record import PersonRecord
+from models.person import PersonRecord  # FIXED: Changed from models.person_record to models.person
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta

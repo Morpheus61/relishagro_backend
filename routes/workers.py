@@ -1,12 +1,12 @@
 """
-RelishAgro Backend - Workers Routes (FIXED)
-Complete worker management with proper trailing slash handling
+RelishAgro Backend - Workers Routes (FIXED IMPORTS)
+Complete worker management with proper trailing slash handling and correct imports
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
 from database import get_db
-from models.person_record import PersonRecord
+from models.person import PersonRecord  # FIXED: Changed from models.person_record to models.person
 from typing import List, Optional
 from pydantic import BaseModel
 import logging

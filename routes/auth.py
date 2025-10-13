@@ -1,5 +1,5 @@
 """
-RelishAgro Backend - Staff ID Only Authentication (FIXED)
+RelishAgro Backend - Staff ID Only Authentication (FIXED IMPORTS)
 Authentication system that only requires staff_id (no password)
 """
 
@@ -13,7 +13,7 @@ import jwt
 import logging
 
 from database import get_db
-from models.person_record import PersonRecord
+from models.person import PersonRecord  # FIXED: Changed from models.person_record to models.person
 
 # Security
 security = HTTPBearer()

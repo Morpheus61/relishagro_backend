@@ -2,7 +2,16 @@
 builder = "nixpacks"
 
 [deploy]
-healthcheckPath = "/health"
-healthcheckTimeout = 300
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 3
+startCommand = "python main.py"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[environments.production.variables]
+# Mobile connectivity optimizations
+CORS_ALLOW_ALL_ORIGINS = "true"
+MOBILE_DATA_SUPPORT = "enabled"
+PREFLIGHT_MAX_AGE = "86400"
+
+# Railway optimizations
+RAILWAY_HEALTHCHECK_TIMEOUT_SEC = "300"
+RAILWAY_HEALTHCHECK_INTERVAL_SEC = "60"

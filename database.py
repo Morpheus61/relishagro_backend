@@ -1,291 +1,102 @@
 import os
-import asyncio
-from typing import Optional
-import asyncpg
-from supabase import create_client, Client
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
 import logging
+from sqlalchemy import create_engine, text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.exc import SQLAlchemyError
+from typing import Generator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Database configuration from environment
+# Database URL from environment variables
 DATABASE_URL = os.getenv("DATABASE_URL")
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://gmqraxtnttopkkflrhla.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtcXJheHRudHRvcGtrZmxyaGxhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU0MDU3ODQsImV4cCI6MjA1MDk4MTc4NH0.GobJJmDBwEU6iu3iRaGIi8DEvTHy6cGu7gXRUm7uJnU")
 
-# Initialize Supabase client
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is required")
 
-# SQLAlchemy engine for direct SQL queries
-engine = None
-SessionLocal = None
+# Create SQLAlchemy engine
+try:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        echo=False  # Set to True for SQL debugging
+    )
+    logger.info("✅ SQLAlchemy engine initialized")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize database engine: {str(e)}")
+    raise
 
-if DATABASE_URL:
-    try:
-        engine = create_engine(DATABASE_URL)
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        logger.info("✅ SQLAlchemy engine initialized")
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize SQLAlchemy engine: {e}")
+# Create SessionLocal class
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Global connection pool
-connection_pool: Optional[asyncpg.Pool] = None
+# Create Base class for models
+Base = declarative_base()
 
-async def init_db_pool():
-    """Initialize the asyncpg connection pool"""
-    global connection_pool
-    
-    if not DATABASE_URL:
-        logger.warning("⚠️ DATABASE_URL not found, skipping pool initialization")
-        return
-    
-    try:
-        connection_pool = await asyncpg.create_pool(
-            DATABASE_URL,
-            min_size=1,
-            max_size=10,
-            command_timeout=60
-        )
-        logger.info("✅ Database connection pool initialized")
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize connection pool: {e}")
-
-async def close_db_pool():
-    """Close the database connection pool"""
-    global connection_pool
-    
-    if connection_pool:
-        await connection_pool.close()
-        logger.info("✅ Database connection pool closed")
-
-# SYNCHRONOUS DATABASE CONNECTION (for existing code compatibility)
-def get_db_connection():
+def get_db() -> Generator[Session, None, None]:
     """
-    Get a synchronous database connection using SQLAlchemy
-    Returns a SQLAlchemy Session object
-    """
-    if not SessionLocal:
-        logger.error("❌ Database not initialized. Check DATABASE_URL.")
-        raise Exception("Database connection not available")
+    Database dependency for FastAPI dependency injection.
+    Creates a new SQLAlchemy SessionLocal for each request and closes it when done.
     
-    try:
-        db_session = SessionLocal()
-        logger.info("✅ Database session created")
-        return db_session
-    except Exception as e:
-        logger.error(f"❌ Failed to create database session: {e}")
-        raise
-
-def get_db_session():
+    Yields:
+        Session: SQLAlchemy database session
     """
-    Dependency function for FastAPI to get database session
-    """
-    db = get_db_connection()
+    db = SessionLocal()
     try:
         yield db
+    except SQLAlchemyError as e:
+        logger.error(f"Database session error: {str(e)}")
+        db.rollback()
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in database session: {str(e)}")
+        db.rollback()
+        raise
     finally:
         db.close()
 
-# ASYNC DATABASE CONNECTION (for new async code)
-async def get_async_db_connection():
+def test_connection() -> bool:
     """
-    Get an async database connection from the pool
+    Test database connectivity
+    
+    Returns:
+        bool: True if connection successful, False otherwise
     """
-    global connection_pool
-    
-    if not connection_pool:
-        await init_db_pool()
-    
-    if not connection_pool:
-        raise Exception("Database connection pool not available")
-    
-    try:
-        async with connection_pool.acquire() as connection:
-            yield connection
-    except Exception as e:
-        logger.error(f"❌ Failed to acquire database connection: {e}")
-        raise
-
-# SUPABASE CLIENT FUNCTIONS
-def get_supabase_client() -> Client:
-    """Get the Supabase client"""
-    return supabase
-
-# DATABASE UTILITY FUNCTIONS
-async def execute_query(query: str, params: tuple = None):
-    """
-    Execute a raw SQL query using asyncpg
-    """
-    global connection_pool
-    
-    if not connection_pool:
-        await init_db_pool()
-    
-    if not connection_pool:
-        raise Exception("Database connection pool not available")
-    
-    try:
-        async with connection_pool.acquire() as connection:
-            if params:
-                result = await connection.fetch(query, *params)
-            else:
-                result = await connection.fetch(query)
-            return result
-    except Exception as e:
-        logger.error(f"❌ Failed to execute query: {e}")
-        raise
-
-def execute_sync_query(query: str, params: dict = None):
-    """
-    Execute a raw SQL query using SQLAlchemy (synchronous)
-    """
-    if not engine:
-        raise Exception("Database engine not available")
-    
     try:
         with engine.connect() as connection:
-            if params:
-                result = connection.execute(text(query), params)
-            else:
-                result = connection.execute(text(query))
-            return result.fetchall()
+            result = connection.execute(text("SELECT 1"))
+            logger.info("✅ Database connection test successful")
+            return True
     except Exception as e:
-        logger.error(f"❌ Failed to execute sync query: {e}")
+        logger.error(f"❌ Database connection test failed: {str(e)}")
+        return False
+
+def init_db():
+    """
+    Initialize database tables (if needed)
+    This will create all tables defined in your models
+    """
+    try:
+        # Import all models here to ensure they are registered with Base
+        from models.person_record import PersonRecord
+        
+        # Create all tables
+        Base.metadata.create_all(bind=engine)
+        logger.info("✅ Database tables initialized")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize database tables: {str(e)}")
         raise
 
-# SUPABASE HELPER FUNCTIONS
-def supabase_select(table: str, columns: str = "*", filters: dict = None):
-    """
-    Helper function for Supabase SELECT queries
-    """
+# Test connection on module import
+if __name__ == "__main__":
+    test_connection()
+else:
+    # Test connection when imported
     try:
-        query = supabase.table(table).select(columns)
-        
-        if filters:
-            for key, value in filters.items():
-                query = query.eq(key, value)
-        
-        result = query.execute()
-        return result.data
+        test_connection()
     except Exception as e:
-        logger.error(f"❌ Supabase select error: {e}")
-        raise
-
-def supabase_insert(table: str, data: dict):
-    """
-    Helper function for Supabase INSERT queries
-    """
-    try:
-        result = supabase.table(table).insert(data).execute()
-        return result.data
-    except Exception as e:
-        logger.error(f"❌ Supabase insert error: {e}")
-        raise
-
-def supabase_update(table: str, data: dict, filters: dict):
-    """
-    Helper function for Supabase UPDATE queries
-    """
-    try:
-        query = supabase.table(table).update(data)
-        
-        for key, value in filters.items():
-            query = query.eq(key, value)
-        
-        result = query.execute()
-        return result.data
-    except Exception as e:
-        logger.error(f"❌ Supabase update error: {e}")
-        raise
-
-def supabase_delete(table: str, filters: dict):
-    """
-    Helper function for Supabase DELETE queries
-    """
-    try:
-        query = supabase.table(table)
-        
-        for key, value in filters.items():
-            query = query.eq(key, value)
-        
-        result = query.delete().execute()
-        return result.data
-    except Exception as e:
-        logger.error(f"❌ Supabase delete error: {e}")
-        raise
-
-# DATABASE HEALTH CHECK
-async def check_database_health():
-    """
-    Check if database connections are working
-    """
-    health_status = {
-        "supabase": False,
-        "asyncpg": False,
-        "sqlalchemy": False
-    }
-    
-    # Test Supabase connection
-    try:
-        result = supabase.table("person_records").select("staff_id").limit(1).execute()
-        health_status["supabase"] = True
-        logger.info("✅ Supabase connection healthy")
-    except Exception as e:
-        logger.error(f"❌ Supabase connection failed: {e}")
-    
-    # Test asyncpg connection
-    try:
-        if connection_pool:
-            async with connection_pool.acquire() as connection:
-                await connection.fetchval("SELECT 1")
-            health_status["asyncpg"] = True
-            logger.info("✅ AsyncPG connection healthy")
-    except Exception as e:
-        logger.error(f"❌ AsyncPG connection failed: {e}")
-    
-    # Test SQLAlchemy connection
-    try:
-        if engine:
-            with engine.connect() as connection:
-                connection.execute(text("SELECT 1"))
-            health_status["sqlalchemy"] = True
-            logger.info("✅ SQLAlchemy connection healthy")
-    except Exception as e:
-        logger.error(f"❌ SQLAlchemy connection failed: {e}")
-    
-    return health_status
-
-# Initialize database on module import
-async def initialize_database():
-    """Initialize all database connections"""
-    logger.info("🔄 Initializing database connections...")
-    await init_db_pool()
-    health = await check_database_health()
-    logger.info(f"📊 Database health: {health}")
-
-# Cleanup function
-async def cleanup_database():
-    """Cleanup database connections"""
-    logger.info("🔄 Cleaning up database connections...")
-    await close_db_pool()
-
-# Export all functions
-__all__ = [
-    'get_db_connection',
-    'get_db_session', 
-    'get_async_db_connection',
-    'get_supabase_client',
-    'execute_query',
-    'execute_sync_query',
-    'supabase_select',
-    'supabase_insert',
-    'supabase_update',
-    'supabase_delete',
-    'check_database_health',
-    'initialize_database',
-    'cleanup_database',
-    'supabase'
-]
+        logger.warning(f"Database connection test failed on import: {str(e)}")

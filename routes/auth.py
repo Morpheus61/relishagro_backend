@@ -15,7 +15,7 @@ import secrets
 
 # Import your database and models
 from database import get_db
-from models.person import PersonRecord  # ✅ ONLY CORRECT IMPORT - REMOVED DUPLICATE
+from models.person import PersonRecord
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,19 +34,17 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
-# Enhanced Pydantic models for universal compatibility
+# Enhanced Pydantic models for staff ID only authentication
 class LoginRequest(BaseModel):
-    """Enhanced login request model with validation"""
+    """Login request model - Staff ID only (no password required)"""
     staff_id: str = Field(..., min_length=1, max_length=50, description="Staff ID for authentication")
-    password: str = Field(..., min_length=1, max_length=255, description="User password")
     device_info: Optional[Dict[str, Any]] = Field(default=None, description="Device information for tracking")
     remember_me: Optional[bool] = Field(default=False, description="Extended session duration")
 
     class Config:
         json_schema_extra = {
             "example": {
-                "staff_id": "STAFF001",
-                "password": "securepassword123",
+                "staff_id": "HF-Regu",
                 "device_info": {
                     "platform": "web",
                     "browser": "Chrome",
@@ -64,6 +62,7 @@ class LoginResponse(BaseModel):
     expires_in: int = Field(..., description="Token expiration time in seconds")
     user: Dict[str, Any] = Field(..., description="User information")
     permissions: list = Field(default=[], description="User permissions")
+    authenticated: bool = Field(default=True, description="Authentication status")
     
     class Config:
         json_schema_extra = {
@@ -72,13 +71,14 @@ class LoginResponse(BaseModel):
                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
                 "expires_in": 3600,
+                "authenticated": True,
                 "user": {
-                    "id": 1,
-                    "staff_id": "STAFF001",
-                    "first_name": "John",
-                    "last_name": "Doe",
-                    "email": "john.doe@relishagro.com",
-                    "role": "supervisor",
+                    "id": "2e5705fd-1456-4511-b40b-bef86c5f8084",
+                    "staff_id": "HF-Regu",
+                    "first_name": "Regu",
+                    "last_name": "K",
+                    "full_name": "Regu K",
+                    "role": "harvestflow_manager",
                     "is_active": True
                 },
                 "permissions": ["read:dashboard", "write:reports"]
@@ -103,18 +103,6 @@ class UserResponse(BaseModel):
     last_login: Optional[datetime]
 
 # Enhanced utility functions
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password with enhanced security"""
-    try:
-        return pwd_context.verify(plain_password, hashed_password)
-    except Exception as e:
-        logger.error(f"Password verification error: {str(e)}")
-        return False
-
-def get_password_hash(password: str) -> str:
-    """Hash password with enhanced security"""
-    return pwd_context.hash(password)
-
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create JWT access token with enhanced claims"""
     to_encode = data.copy()
@@ -227,7 +215,7 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        if user.status != "active":  # Fixed: changed from is_active to status
+        if user.status != "active":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User account is inactive",
@@ -251,7 +239,7 @@ async def login(
     db: Session = Depends(get_db)
 ):
     """
-    Enhanced login endpoint with universal device compatibility
+    Staff ID-only login endpoint - No password required
     Supports web browsers, mobile apps, PWAs, and all platforms
     """
     
@@ -267,10 +255,10 @@ async def login(
             logger.warning(f"Login failed: User not found for staff_id: {login_data.staff_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid staff ID or password"
+                detail="Invalid staff ID"
             )
         
-        # Check if user is active - Note: PersonRecord uses 'status' field, not 'is_active'
+        # Check if user is active
         if user.status != "active":
             logger.warning(f"Login failed: Inactive user: {login_data.staff_id}")
             raise HTTPException(
@@ -278,14 +266,11 @@ async def login(
                 detail="User account is inactive"
             )
         
-        # Simple password verification for now (allowing demo login)
-        # In production, you would verify hashed passwords properly
-        
         # Create token data
         token_data = {
             "sub": user.staff_id,
             "user_id": str(user.id),
-            "role": user.person_type,  # Using person_type as role
+            "role": user.person_type,
             "full_name": user.full_name or f"{user.first_name or ''} {user.last_name or ''}".strip()
         }
         
@@ -320,6 +305,7 @@ async def login(
             "person_type": user.person_type,
             "designation": user.designation,
             "status": user.status,
+            "role": user.person_type,  # Using person_type as role
             "created_at": user.created_at.isoformat() if user.created_at else None,
         }
         
@@ -344,7 +330,8 @@ async def login(
             token_type="bearer",
             expires_in=int(access_token_expires.total_seconds()),
             user=user_data,
-            permissions=permissions
+            permissions=permissions,
+            authenticated=True
         )
         
         response = JSONResponse(
@@ -467,6 +454,8 @@ async def auth_health_check(request: Request):
             "service": "authentication",
             "status": "healthy",
             "timestamp": datetime.utcnow().isoformat(),
+            "authentication_method": "staff_id_only",
+            "password_required": False,
             "features": {
                 "cors_enabled": True,
                 "universal_compatibility": True,

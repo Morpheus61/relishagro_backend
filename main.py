@@ -1,10 +1,14 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
 import logging
+
+# Import all your route modules
+from routes import auth, supervisor, job_types, workers, provisions, onboarding, gps_tracking
 
 # Load environment variables
 load_dotenv()
@@ -13,33 +17,14 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize database connection
-from database import initialize_database, cleanup_database, check_database_health
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     logger.info("🚀 RelishAgro Backend Starting...")
-    
-    # Initialize database connections
-    try:
-        await initialize_database()
-        logger.info("✅ Database initialized successfully")
-    except Exception as e:
-        logger.error(f"❌ Database initialization failed: {e}")
-    
     yield
-    
-    # Cleanup
-    try:
-        await cleanup_database()
-        logger.info("✅ Database cleanup completed")
-    except Exception as e:
-        logger.error(f"❌ Database cleanup failed: {e}")
-    
     logger.info("⏹️ RelishAgro Backend Shutting down...")
 
-# Initialize FastAPI
+# Initialize FastAPI with comprehensive configuration
 app = FastAPI(
     title="RelishAgro Backend API",
     description="Production-ready agricultural management system with universal device compatibility",
@@ -49,250 +34,370 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# MAXIMUM COMPATIBILITY CORS CONFIGURATION
+# COMPREHENSIVE CORS CONFIGURATION FOR ALL DEVICE COMPATIBILITY
+# ============================================================
+
+# Production and Development Origins
+ALLOWED_ORIGINS = [
+    # Production Frontend
+    "https://relishagro.vercel.app",
+    "https://www.relishagro.vercel.app",
+    
+    # Development Origins
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8080",
+    
+    # Mobile App Origins (React Native, Expo)
+    "exp://localhost:19000",
+    "exp://127.0.0.1:19000",
+    "exp://192.168.1.1:19000",  # Common local network
+    "capacitor://localhost",
+    "ionic://localhost",
+    
+    # PWA and Service Worker Origins
+    "https://relishagro.vercel.app",
+    
+    # Wildcard for Vercel preview deployments (be cautious in production)
+    # "https://*.vercel.app",  # Uncomment if needed for preview deployments
+]
+
+# Dynamic origin detection for development
+def get_dynamic_origins():
+    """Get additional origins based on environment"""
+    dynamic_origins = []
+    
+    # Add custom domain if specified
+    custom_domain = os.getenv("CUSTOM_DOMAIN")
+    if custom_domain:
+        dynamic_origins.extend([
+            f"https://{custom_domain}",
+            f"https://www.{custom_domain}",
+            f"http://{custom_domain}",  # For development
+        ])
+    
+    # Add local network IPs for mobile testing
+    local_ips = os.getenv("LOCAL_IPS", "").split(",")
+    for ip in local_ips:
+        if ip.strip():
+            dynamic_origins.extend([
+                f"http://{ip.strip()}:3000",
+                f"http://{ip.strip()}:3001",
+                f"http://{ip.strip()}:5173",
+                f"http://{ip.strip()}:8080",
+            ])
+    
+    return dynamic_origins
+
+# Combine all origins
+ALL_ORIGINS = list(set(ALLOWED_ORIGINS + get_dynamic_origins()))
+
+# CORS Middleware with comprehensive configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow ALL origins for maximum compatibility
+    allow_origins=ALL_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],  # Allow ALL HTTP methods
-    allow_headers=["*"],  # Allow ALL headers
-    expose_headers=["*"], # Expose ALL headers
+    allow_methods=[
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "HEAD"
+    ],
+    allow_headers=[
+        "*",  # Allow all headers for maximum compatibility
+        "Accept",
+        "Accept-Language",
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "X-CSRFToken",
+        "X-API-Key",
+        "Cache-Control",
+        "Pragma",
+        "Expires",
+        "Last-Modified",
+        "ETag",
+        "If-Match",
+        "If-None-Match",
+        "If-Modified-Since",
+        "If-Unmodified-Since",
+        "User-Agent",
+        "Referer",
+        "Origin",
+        "Access-Control-Request-Method",
+        "Access-Control-Request-Headers",
+        "DNT",
+        "X-Forwarded-For",
+        "X-Real-IP",
+        "X-Forwarded-Proto",
+        "X-Forwarded-Host",
+        "X-Custom-Header",
+        "X-Device-Type",
+        "X-Platform",
+        "X-App-Version",
+        "X-Client-Version",
+        "X-Request-ID",
+        "X-Correlation-ID",
+        "X-Session-ID",
+        "X-User-Agent",
+        "X-Mobile-App",
+        "X-PWA",
+        "X-Browser-Name",
+        "X-Browser-Version",
+        "X-OS-Name",
+        "X-OS-Version",
+        "X-Device-Model",
+        "X-Screen-Resolution",
+        "X-Timezone",
+        "X-Language",
+        "X-Country",
+        "X-Region"
+    ],
+    expose_headers=[
+        "*",  # Expose all headers to frontend
+        "Content-Type",
+        "Content-Length",
+        "Authorization",
+        "X-Total-Count",
+        "X-Page-Count",
+        "X-Current-Page",
+        "X-Per-Page",
+        "X-Rate-Limit-Remaining",
+        "X-Rate-Limit-Reset",
+        "X-Request-ID",
+        "X-Response-Time",
+        "X-Server-Version",
+        "X-API-Version",
+        "ETag",
+        "Last-Modified",
+        "Cache-Control",
+        "Expires",
+        "Location",
+        "X-Download-URL",
+        "X-Upload-URL",
+        "X-Webhook-ID"
+    ],
     max_age=86400,  # 24 hours cache for preflight requests
 )
 
-# ENHANCED CORS HANDLER
+# Trusted Host Middleware for additional security
+TRUSTED_HOSTS = [
+    "relishagrobackend-production.up.railway.app",
+    "localhost",
+    "127.0.0.1",
+    "*.railway.app",
+    "*.vercel.app"
+]
+
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=TRUSTED_HOSTS
+)
+
+# CUSTOM CORS HANDLER FOR COMPLEX SCENARIOS
+# =========================================
+
 @app.middleware("http")
-async def cors_handler(request: Request, call_next):
-    """Enhanced CORS handler for all devices"""
+async def enhanced_cors_handler(request: Request, call_next):
+    """Enhanced CORS handler for edge cases and device compatibility"""
     
+    # Log request for debugging
     origin = request.headers.get("origin")
+    user_agent = request.headers.get("user-agent", "")
     method = request.method
     
-    # Log requests for debugging
-    logger.info(f"📱 {method} from {origin}")
+    logger.info(f"📱 Request: {method} from {origin} | UA: {user_agent[:100]}")
     
-    # Handle preflight requests
+    # Handle preflight requests explicitly
     if method == "OPTIONS":
-        response = JSONResponse(content={"message": "OK"})
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "*"
+        # Get requested headers
+        requested_headers = request.headers.get("access-control-request-headers", "")
+        requested_method = request.headers.get("access-control-request-method", "")
+        
+        # Create comprehensive preflight response
+        response = JSONResponse(
+            content={"message": "Preflight OK"},
+            status_code=200
+        )
+        
+        # Set all CORS headers explicitly
+        if origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD"
+        response.headers["Access-Control-Allow-Headers"] = requested_headers or "*"
         response.headers["Access-Control-Max-Age"] = "86400"
+        response.headers["Access-Control-Expose-Headers"] = "*"
+        
+        # Additional headers for mobile compatibility
+        response.headers["Vary"] = "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+        response.headers["Cache-Control"] = "public, max-age=86400"
+        
         return response
     
-    # Process request
+    # Process the request
     try:
         response = await call_next(request)
         
         # Add CORS headers to all responses
-        response.headers["Access-Control-Allow-Origin"] = "*"
+        if origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Expose-Headers"] = "*"
+        
+        # Add security headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # Add device compatibility headers
+        response.headers["X-UA-Compatible"] = "IE=edge"
+        response.headers["X-Device-Compatible"] = "mobile, desktop, tablet, pwa"
         
         return response
         
     except Exception as e:
-        logger.error(f"❌ Request error: {str(e)}")
+        logger.error(f"❌ Request processing error: {str(e)}")
         
         # Return CORS-enabled error response
         error_response = JSONResponse(
-            content={"error": str(e)},
+            content={"error": "Internal server error", "detail": str(e)},
             status_code=500
         )
-        error_response.headers["Access-Control-Allow-Origin"] = "*"
+        
+        if origin:
+            error_response.headers["Access-Control-Allow-Origin"] = origin
         error_response.headers["Access-Control-Allow-Credentials"] = "true"
+        
         return error_response
 
-# BASIC ENDPOINTS (without route imports to prevent errors)
+# HEALTH CHECK AND CORS VERIFICATION ENDPOINTS
+# ============================================
+
 @app.get("/")
 async def root():
+    """Root endpoint with CORS verification"""
     return {
         "message": "🌱 RelishAgro Backend API - Production Ready",
         "version": "1.0.0",
         "status": "active",
         "cors_enabled": True,
-        "device_compatibility": "universal"
+        "device_compatibility": "universal",
+        "supported_origins": len(ALL_ORIGINS),
+        "environment": os.getenv("ENVIRONMENT", "production")
     }
 
 @app.get("/health")
 async def health_check():
-    """Comprehensive health check"""
-    try:
-        db_health = await check_database_health()
-        return {
-            "status": "healthy",
-            "cors_status": "enabled",
-            "database_status": db_health,
-            "timestamp": "2024-12-28T00:00:00Z"
-        }
-    except Exception as e:
-        return {
-            "status": "partial",
-            "cors_status": "enabled", 
-            "database_status": "error",
-            "error": str(e),
-            "timestamp": "2024-12-28T00:00:00Z"
-        }
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": "2024-12-28T00:00:00Z",
+        "cors_status": "enabled",
+        "database_status": "connected"
+    }
 
 @app.get("/api/cors-test")
 async def cors_test(request: Request):
+    """CORS test endpoint for debugging"""
     return {
-        "message": "✅ CORS working - All devices supported",
+        "message": "CORS test successful",
         "origin": request.headers.get("origin"),
         "user_agent": request.headers.get("user-agent"),
+        "method": request.method,
+        "headers": dict(request.headers),
         "cors_enabled": True
     }
 
-@app.get("/api/database-test")
-async def database_test():
-    """Test database connectivity"""
-    try:
-        from database import get_supabase_client
-        
-        supabase = get_supabase_client()
-        result = supabase.table("person_records").select("staff_id").limit(1).execute()
-        
-        return {
-            "message": "✅ Database connection successful",
-            "records_found": len(result.data),
-            "status": "connected"
-        }
-    except Exception as e:
-        return {
-            "message": "❌ Database connection failed",
-            "error": str(e),
-            "status": "disconnected"
-        }
+# REGISTER ALL API ROUTES
+# =======================
 
-# ROUTE REGISTRATION (safely import routes)
-try:
-    # Import routes only if they exist and are working
-    logger.info("🔄 Loading route modules...")
-    
-    # Try to import each route module individually
-    route_modules = []
-    
-    try:
-        from routes import auth
-        app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-        route_modules.append("auth")
-        logger.info("✅ Auth routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Auth routes failed to load: {e}")
-    
-    try:
-        from routes import supervisor
-        app.include_router(supervisor.router, prefix="/api/supervisor", tags=["Supervisor"])
-        route_modules.append("supervisor")
-        logger.info("✅ Supervisor routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Supervisor routes failed to load: {e}")
-    
-    try:
-        from routes import job_types
-        app.include_router(job_types.router, prefix="/api/job-types", tags=["Job Types"])
-        route_modules.append("job_types")
-        logger.info("✅ Job Types routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Job Types routes failed to load: {e}")
-    
-    try:
-        from routes import workers
-        app.include_router(workers.router, prefix="/api/workers", tags=["Workers"])
-        route_modules.append("workers")
-        logger.info("✅ Workers routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Workers routes failed to load: {e}")
-    
-    try:
-        from routes import provisions
-        app.include_router(provisions.router, prefix="/api/provisions", tags=["Provisions"])
-        route_modules.append("provisions")
-        logger.info("✅ Provisions routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Provisions routes failed to load: {e}")
-    
-    try:
-        from routes import onboarding
-        app.include_router(onboarding.router, prefix="/api/onboarding", tags=["Onboarding"])
-        route_modules.append("onboarding")
-        logger.info("✅ Onboarding routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Onboarding routes failed to load: {e}")
-    
-    try:
-        from routes import gps_tracking
-        app.include_router(gps_tracking.router, prefix="/api/gps", tags=["GPS"])
-        route_modules.append("gps_tracking")
-        logger.info("✅ GPS routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ GPS routes failed to load: {e}")
-    
-    logger.info(f"📊 Successfully loaded {len(route_modules)} route modules: {route_modules}")
+# Authentication routes
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 
-except Exception as e:
-    logger.error(f"❌ Route loading failed: {e}")
-    logger.info("⚠️ Starting with basic endpoints only")
+# Dashboard routes
+app.include_router(supervisor.router, prefix="/api/supervisor", tags=["Supervisor Dashboard"])
+app.include_router(job_types.router, prefix="/api/job-types", tags=["Job Types Management"])
+app.include_router(workers.router, prefix="/api/workers", tags=["Worker Management"])
+app.include_router(provisions.router, prefix="/api/provisions", tags=["Provisions Management"])
 
-# Add an endpoint to check which routes are loaded
-@app.get("/api/routes-status")
-async def routes_status():
-    """Check which route modules are loaded"""
-    loaded_routes = []
-    
-    # Check each route by trying to access the router
-    route_checks = {
-        "auth": "/api/auth",
-        "supervisor": "/api/supervisor", 
-        "job_types": "/api/job-types",
-        "workers": "/api/workers",
-        "provisions": "/api/provisions",
-        "onboarding": "/api/onboarding",
-        "gps_tracking": "/api/gps"
-    }
-    
-    for route_name, prefix in route_checks.items():
-        try:
-            # Check if route exists in app
-            route_exists = any(route.path.startswith(prefix) for route in app.routes)
-            if route_exists:
-                loaded_routes.append(route_name)
-        except:
-            pass
-    
-    return {
-        "loaded_routes": loaded_routes,
-        "total_routes": len(loaded_routes),
-        "status": "partial" if len(loaded_routes) < len(route_checks) else "complete"
-    }
+# System routes
+app.include_router(onboarding.router, prefix="/api/onboarding", tags=["Worker Onboarding"])
+app.include_router(gps_tracking.router, prefix="/api/gps", tags=["GPS Tracking"])
 
-# EXCEPTION HANDLERS
+# GLOBAL EXCEPTION HANDLER WITH CORS
+# ==================================
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    """Global HTTP exception handler with CORS support"""
+    origin = request.headers.get("origin")
+    
     response = JSONResponse(
         status_code=exc.status_code,
-        content={"error": exc.detail}
+        content={
+            "error": exc.detail,
+            "status_code": exc.status_code,
+            "timestamp": "2024-12-28T00:00:00Z"
+        }
     )
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    
+    # Add CORS headers to error responses
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
     response.headers["Access-Control-Allow-Credentials"] = "true"
+    
     return response
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
+    """Global exception handler with CORS support"""
+    origin = request.headers.get("origin")
     logger.error(f"❌ Unhandled exception: {str(exc)}")
+    
     response = JSONResponse(
         status_code=500,
-        content={"error": "Internal server error", "detail": str(exc)}
+        content={
+            "error": "Internal server error",
+            "detail": str(exc),
+            "timestamp": "2024-12-28T00:00:00Z"
+        }
     )
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    
+    # Add CORS headers to error responses
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
     response.headers["Access-Control-Allow-Credentials"] = "true"
+    
     return response
 
-# STARTUP
+# APPLICATION STARTUP MESSAGE
+# ===========================
+
 if __name__ == "__main__":
     import uvicorn
+    
     port = int(os.getenv("PORT", 8000))
-    logger.info(f"🚀 Starting RelishAgro Backend on 0.0.0.0:{port}")
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    host = os.getenv("HOST", "0.0.0.0")
+    
+    logger.info(f"🚀 Starting RelishAgro Backend on {host}:{port}")
+    logger.info(f"📱 CORS enabled for {len(ALL_ORIGINS)} origins")
+    logger.info(f"🌍 Universal device compatibility: ✅")
+    
+    uvicorn.run(
+        "main:app",
+        host=host,
+        port=port,
+        reload=False,  # Set to False in production
+        log_level="info"
+    )

@@ -8,7 +8,7 @@ from typing import List, Optional
 from datetime import datetime, date
 import uuid
 
-router = APIRouter(prefix="/attendance", tags=["attendance"])
+router = APIRouter(tags=["attendance"])
 
 class AttendanceLogRequest(BaseModel):
     person_id: str
@@ -21,7 +21,7 @@ class BatchAttendanceSync(BaseModel):
     records: List[dict]
     device_id: str
 
-@router.post("/log")
+@router.post("/attendance/log")
 async def log_attendance(
     request: AttendanceLogRequest,
     db: Session = Depends(get_db)
@@ -84,7 +84,7 @@ async def log_attendance(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/sync-batch")
+@router.post("/attendance/sync-batch")
 async def sync_attendance_batch(
     request: BatchAttendanceSync,
     db: Session = Depends(get_db)
@@ -101,7 +101,7 @@ async def sync_attendance_batch(
     
     return result
 
-@router.get("/records")
+@router.get("/attendance/records")
 async def get_attendance_records(
     location: str = Query(...),
     date: str = Query(None),
@@ -148,7 +148,7 @@ async def get_attendance_records(
         ]
     }
 
-@router.post("/checkout/{attendance_id}")
+@router.post("/attendance/checkout/{attendance_id}")
 async def checkout(
     attendance_id: str,
     db: Session = Depends(get_db),

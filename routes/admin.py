@@ -88,7 +88,7 @@ def generate_staff_id(role: str, first_name: str, last_name: str) -> str:
 
 # Routes
 
-@router.get("/stats", response_model=AdminStats)
+@router.get("/admin/stats", response_model=AdminStats)
 async def get_admin_stats(db: Session = Depends(get_db)):
     """Get comprehensive admin statistics"""
     try:
@@ -140,7 +140,7 @@ async def get_admin_stats(db: Session = Depends(get_db)):
             detail=f"Failed to retrieve admin statistics: {str(e)}"
         )
 
-@router.get("/users", response_model=AdminUserResponse)
+@router.get("/admin/users", response_model=AdminUserResponse)
 async def get_all_users(
     page: int = 1,
     per_page: int = 20,
@@ -207,7 +207,7 @@ async def get_all_users(
             detail=f"Failed to retrieve users: {str(e)}"
         )
 
-@router.get("/users/{staff_id}")
+@router.get("/admin/users/{staff_id}")
 async def get_user_by_id(staff_id: str, db: Session = Depends(get_db)):
     """Get specific user by staff_id"""
     try:
@@ -239,7 +239,7 @@ async def get_user_by_id(staff_id: str, db: Session = Depends(get_db)):
             detail=f"Failed to retrieve user: {str(e)}"
         )
 
-@router.post("/users", status_code=status.HTTP_201_CREATED)
+@router.post("/admin/users", status_code=status.HTTP_201_CREATED)
 async def create_user(user_data: UserCreateRequest, db: Session = Depends(get_db)):
     """Create new user"""
     try:
@@ -282,7 +282,7 @@ async def create_user(user_data: UserCreateRequest, db: Session = Depends(get_db
             detail=f"Failed to create user: {str(e)}"
         )
 
-@router.put("/users/{staff_id}")
+@router.put("/admin/users/{staff_id}")
 async def update_user(
     staff_id: str, 
     user_update: UserUpdateRequest, 
@@ -330,7 +330,7 @@ async def update_user(
             detail=f"Failed to update user: {str(e)}"
         )
 
-@router.delete("/users/{staff_id}")
+@router.delete("/admin/users/{staff_id}")
 async def delete_user(staff_id: str, db: Session = Depends(get_db)):
     """Delete user (soft delete by setting inactive)"""
     try:
@@ -360,7 +360,7 @@ async def delete_user(staff_id: str, db: Session = Depends(get_db)):
             detail=f"Failed to delete user: {str(e)}"
         )
 
-@router.get("/system/health")
+@router.get("/admin/system/health")
 async def get_system_health(db: Session = Depends(get_db)):
     """Get system health status"""
     try:
@@ -383,7 +383,7 @@ async def get_system_health(db: Session = Depends(get_db)):
             "error": str(e)
         }
 
-@router.get("/roles")
+@router.get("/admin/roles")
 async def get_available_roles():
     """Get all available roles in the system"""
     return {

@@ -11,7 +11,7 @@ import uuid
 import cv2
 import numpy as np
 
-router = APIRouter(prefix="/onboarding", tags=["onboarding"])
+router = APIRouter(tags=["onboarding"])
 notification_service = NotificationService()
 face_service = FaceRecognitionService()
 
@@ -24,7 +24,7 @@ class OnboardingSubmission(BaseModel):
     aadhaar: Optional[str] = None
     is_seasonal: bool = False
 
-@router.post("/submit")
+@router.post("/onboarding/submit")
 async def submit_onboarding(
     first_name: str = Form(...),
     last_name: str = Form(...),
@@ -103,7 +103,7 @@ async def submit_onboarding(
         "onboarding_id": str(onboarding.id)
     }
 
-@router.get("/pending")
+@router.get("/onboarding/pending")
 async def get_pending_onboarding(
     db: Session = Depends(get_db),
     current_user: PersonRecord = Depends(require_role(["admin"]))
@@ -132,7 +132,7 @@ async def get_pending_onboarding(
         ]
     }
 
-@router.post("/approve/{onboarding_id}")
+@router.post("/onboarding/approve/{onboarding_id}")
 async def approve_onboarding(
     onboarding_id: str,
     db: Session = Depends(get_db),
@@ -191,7 +191,7 @@ async def approve_onboarding(
         person_type=person_type,
         designation=request.role,
         status="active",
-        is_seasonal_worker=False,  # Set based on request if needed
+        is_seasonal_worker=False,
         employment_start_date=datetime.utcnow(),
         created_by=current_user.id
     )
@@ -225,7 +225,7 @@ async def approve_onboarding(
         "staff_id": staff_id
     }
 
-@router.delete("/reject/{onboarding_id}")
+@router.delete("/onboarding/reject/{onboarding_id}")
 async def reject_onboarding(
     onboarding_id: str,
     reason: str = Form(...),

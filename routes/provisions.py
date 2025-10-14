@@ -8,10 +8,10 @@ from typing import Optional, List
 from datetime import datetime
 import uuid
 
-router = APIRouter(prefix="/provisions", tags=["provisions"])
+router = APIRouter(tags=["provisions"])
 notification_service = NotificationService()
 
-@router.post("/request")
+@router.post("/provisions/request")
 async def create_provision_request(
     request_type: str = Form(...),
     description: str = Form(...),
@@ -60,7 +60,7 @@ async def create_provision_request(
         "request_id": str(provision.id)
     }
 
-@router.get("/pending")
+@router.get("/provisions/pending")
 async def get_pending_requests(
     db: Session = Depends(get_db),
     current_user: PersonRecord = Depends(require_role(["flavorcore_manager", "admin"]))
@@ -70,13 +70,11 @@ async def get_pending_requests(
     query = db.query(ProvisionRequest)
     
     if current_user.person_type == "flavorcore_manager":
-        # Show requests pending FC Manager review
         query = query.filter(
             ProvisionRequest.status == "pending",
             ProvisionRequest.reviewed_by_fc_manager.is_(None)
         )
     else:  # admin
-        # Show requests pending admin approval
         query = query.filter(
             ProvisionRequest.status == "pending",
             ProvisionRequest.reviewed_by_fc_manager.isnot(None),
@@ -103,7 +101,7 @@ async def get_pending_requests(
         ]
     }
 
-@router.post("/review/{request_id}")
+@router.post("/provisions/review/{request_id}")
 async def review_provision_request(
     request_id: str,
     approved: bool = Form(...),
@@ -149,7 +147,7 @@ async def review_provision_request(
         "message": "Request forwarded to Admin for final approval"
     }
 
-@router.post("/approve/{request_id}")
+@router.post("/provisions/approve/{request_id}")
 async def approve_provision_request(
     request_id: str,
     vendor_id: Optional[str] = Form(None),
@@ -172,7 +170,6 @@ async def approve_provision_request(
         provision.vendor_id = uuid.UUID(vendor_id)
         provision.vendor_notified_at = datetime.utcnow()
         
-        # Notify vendor
         vendor = db.query(PersonRecord).filter(
             PersonRecord.id == uuid.UUID(vendor_id)
         ).first()

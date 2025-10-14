@@ -8,11 +8,14 @@ import cv2
 import numpy as np
 from typing import Optional
 import uuid
+from datetime import datetime
+from config import settings
+from fastapi import status
 
-router = APIRouter(prefix="/face", tags=["face_recognition"])
+router = APIRouter(tags=["face_recognition"])
 face_service = FaceRecognitionService()
 
-@router.post("/register")
+@router.post("/face/register")
 async def register_face(
     person_id: str = Form(...),
     image: UploadFile = File(...),
@@ -86,7 +89,7 @@ async def register_face(
             detail=f"Face registration failed: {str(e)}"
         )
 
-@router.post("/authenticate")
+@router.post("/face/authenticate")
 async def authenticate_face(
     image: UploadFile = File(...),
     location: str = Form("main_gate"),

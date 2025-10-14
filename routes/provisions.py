@@ -60,7 +60,7 @@ async def create_provision_request(
         "request_id": str(provision.id)
     }
 
-@router.get("/provisions/pending")
+@router.get("/pending")
 async def get_pending_requests(
     db: Session = Depends(get_db),
     current_user: PersonRecord = Depends(require_role(["flavorcore_manager", "admin"]))
@@ -101,7 +101,7 @@ async def get_pending_requests(
         ]
     }
 
-@router.post("/provisions/review/{request_id}")
+@router.post("/review/{request_id}")
 async def review_provision_request(
     request_id: str,
     approved: bool = Form(...),
@@ -147,7 +147,7 @@ async def review_provision_request(
         "message": "Request forwarded to Admin for final approval"
     }
 
-@router.post("/provisions/approve/{request_id}")
+@router.post("/approve/{request_id}")
 async def approve_provision_request(
     request_id: str,
     vendor_id: Optional[str] = Form(None),

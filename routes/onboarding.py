@@ -103,7 +103,7 @@ async def submit_onboarding(
         "onboarding_id": str(onboarding.id)
     }
 
-@router.get("/onboarding/pending")
+@router.get("/pending")
 async def get_pending_onboarding(
     db: Session = Depends(get_db),
     current_user: PersonRecord = Depends(require_role(["admin"]))
@@ -132,7 +132,7 @@ async def get_pending_onboarding(
         ]
     }
 
-@router.post("/onboarding/approve/{onboarding_id}")
+@router.post("/approve/{onboarding_id}")
 async def approve_onboarding(
     onboarding_id: str,
     db: Session = Depends(get_db),
@@ -225,7 +225,7 @@ async def approve_onboarding(
         "staff_id": staff_id
     }
 
-@router.delete("/onboarding/reject/{onboarding_id}")
+@router.delete("/reject/{onboarding_id}")
 async def reject_onboarding(
     onboarding_id: str,
     reason: str = Form(...),

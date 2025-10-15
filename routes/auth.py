@@ -1,20 +1,18 @@
 """
-RelishAgro Backend - CORRECTED Mobile-Compatible Authentication
-Staff ID only authentication with comprehensive mobile browser support
-CORRECTED to work with actual database.py structure
+RelishAgro Backend - Mobile-Compatible Authentication (COMPLETE FIX)
+Enhanced authentication with mobile browser compatibility and debugging
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 from typing import Optional
 import jwt
 import logging
+import re
 
-# CORRECTED: Import from actual database structure
 from database import get_db
 from models.person import PersonRecord
 
@@ -49,6 +47,19 @@ class UserResponse(BaseModel):
     last_name: str
     role: str
     is_active: bool
+
+# Mobile Detection Utility
+def is_mobile_browser(user_agent: str) -> bool:
+    """Detect if request is from mobile browser"""
+    mobile_patterns = [
+        r'iPhone', r'iPad', r'Android', r'Windows Phone', r'BlackBerry',
+        r'Mobile', r'Tablet', r'Touch', r'Opera Mini', r'Opera Mobi'
+    ]
+    
+    for pattern in mobile_patterns:
+        if re.search(pattern, user_agent, re.IGNORECASE):
+            return True
+    return False
 
 # Utility Functions
 def get_role_from_staff_id(staff_id: str) -> str:
@@ -122,32 +133,23 @@ async def get_current_user(token: str = Depends(security), db: Session = Depends
             detail="Authentication failed"
         )
 
-def is_mobile_browser(user_agent: str) -> bool:
-    """Detect if request is from mobile browser"""
-    mobile_keywords = [
-        'Mobile', 'Android', 'iPhone', 'iPad', 'iPod', 
-        'BlackBerry', 'Windows Phone', 'Opera Mini'
-    ]
-    return any(keyword in user_agent for keyword in mobile_keywords)
-
-# MOBILE-COMPATIBLE ROUTES
+# Routes
 
 @router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
 async def login(login_data: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """
-    MOBILE-COMPATIBLE Staff ID only authentication - no password required
-    Enhanced with mobile browser detection and compatibility features
+    Staff ID only authentication - Enhanced Mobile Compatibility
     """
     try:
-        # Get user agent for mobile detection
+        # Mobile browser detection
         user_agent = request.headers.get("user-agent", "")
         is_mobile = is_mobile_browser(user_agent)
         
-        # Log detailed request information for mobile debugging
-        logging.info(f"🔐 Login attempt from {'mobile' if is_mobile else 'desktop'}")
-        logging.info(f"User-Agent: {user_agent}")
-        logging.info(f"Client IP: {request.client.host if request.client else 'unknown'}")
-        logging.info(f"Staff ID: {login_data.staff_id}")
+        logging.info(f"🔐 Login attempt - Staff ID: {login_data.staff_id}")
+        logging.info(f"📱 Mobile browser: {is_mobile}")
+        logging.info(f"🌐 User Agent: {user_agent}")
+        logging.info(f"🔗 Origin: {request.headers.get('origin', 'N/A')}")
+        logging.info(f"🗂️ Referer: {request.headers.get('referer', 'N/A')}")
         
         # Query user from database
         user = db.query(PersonRecord).filter(
@@ -155,7 +157,7 @@ async def login(login_data: LoginRequest, request: Request, db: Session = Depend
         ).first()
         
         if not user:
-            logging.warning(f"❌ Login failed - Invalid staff_id: {login_data.staff_id}")
+            logging.error(f"❌ User not found for staff_id: {login_data.staff_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid staff ID. User not found."
@@ -164,24 +166,22 @@ async def login(login_data: LoginRequest, request: Request, db: Session = Depend
         # Extract role from staff_id
         role = get_role_from_staff_id(user.staff_id)
         
-        # Create access token with mobile-specific claims
+        # Create access token with mobile-friendly settings
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        token_data = {
-            "sub": user.staff_id, 
-            "role": role,
-            "mobile": is_mobile,
-            "iat": datetime.utcnow()
-        }
-        
         access_token = create_access_token(
-            data=token_data,
+            data={
+                "sub": user.staff_id, 
+                "role": role,
+                "mobile": is_mobile,
+                "issued_at": datetime.utcnow().isoformat()
+            },
             expires_delta=access_token_expires
         )
         
-        logging.info(f"✅ SUCCESSFUL LOGIN - Staff: {user.staff_id}, Role: {role}, Mobile: {is_mobile}")
+        logging.info(f"✅ Login successful - Staff: {user.staff_id}, Role: {role}")
+        logging.info(f"🎟️ Token generated successfully")
         
-        # Create response with mobile compatibility flag
-        response_data = LoginResponse(
+        return LoginResponse(
             access_token=access_token,
             token_type="bearer",
             staff_id=user.staff_id,
@@ -192,55 +192,45 @@ async def login(login_data: LoginRequest, request: Request, db: Session = Depend
             mobile_compatible=True
         )
         
-        # Create JSON response with mobile-friendly headers
-        response = JSONResponse(
-            content=response_data.dict(),
-            status_code=200
-        )
-        
-        # Add mobile-specific headers
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        
-        return response
-        
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"❌ LOGIN ERROR for {login_data.staff_id}: {str(e)}")
+        logging.error(f"❌ Login error for staff_id {login_data.staff_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Authentication failed: {str(e)}"
         )
 
-# MOBILE TEST ENDPOINT - GET method for direct browser testing
-@router.get("/mobile-test")
-async def mobile_auth_test(request: Request):
+@router.get("/mobile-test", status_code=status.HTTP_200_OK)
+async def mobile_compatibility_test(request: Request):
     """
-    Mobile connectivity test endpoint - accessible via GET for browser testing
+    Mobile browser compatibility test endpoint
     """
-    user_agent = request.headers.get("user-agent", "")
-    is_mobile = is_mobile_browser(user_agent)
-    
-    return {
-        "status": "success",
-        "message": "Mobile authentication service is working",
-        "mobile_detected": is_mobile,
-        "user_agent": user_agent,
-        "timestamp": datetime.utcnow().isoformat(),
-        "endpoints_available": {
-            "login": "POST /api/auth/login",
-            "user_info": "GET /api/auth/me",
-            "logout": "POST /api/auth/logout",
-            "health": "GET /api/auth/health"
+    try:
+        user_agent = request.headers.get("user-agent", "")
+        is_mobile = is_mobile_browser(user_agent)
+        
+        return {
+            "status": "success",
+            "mobile_detected": is_mobile,
+            "user_agent": user_agent,
+            "timestamp": datetime.utcnow().isoformat(),
+            "cors_headers": dict(request.headers),
+            "mobile_compatibility": "enabled"
         }
-    }
+        
+    except Exception as e:
+        logging.error(f"Mobile test error: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "mobile_compatibility": "disabled"
+        }
 
 @router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)
 async def get_current_user_info(current_user: PersonRecord = Depends(get_current_user)):
     """
-    Get current authenticated user information - mobile compatible
+    Get current authenticated user information
     """
     try:
         return UserResponse(
@@ -264,8 +254,8 @@ async def logout(current_user: PersonRecord = Depends(get_current_user)):
     Logout current user (token-based, so client should discard token)
     """
     try:
-        logging.info(f"🚪 User {current_user.staff_id} logged out")
-        return {"message": "Logged out successfully", "mobile_compatible": True}
+        logging.info(f"User {current_user.staff_id} logged out")
+        return {"message": "Logged out successfully"}
         
     except Exception as e:
         logging.error(f"Logout error: {str(e)}")
@@ -275,21 +265,16 @@ async def logout(current_user: PersonRecord = Depends(get_current_user)):
         )
 
 @router.get("/health", status_code=status.HTTP_200_OK)
-async def health_check(request: Request):
+async def health_check():
     """
-    Health check endpoint for authentication service with mobile detection
+    Health check endpoint for authentication service
     """
-    user_agent = request.headers.get("user-agent", "")
-    is_mobile = is_mobile_browser(user_agent)
-    
     return {
         "status": "healthy",
         "service": "authentication",
         "timestamp": datetime.utcnow().isoformat(),
         "authentication_method": "staff_id_only",
-        "mobile_compatible": True,
-        "client_type": "mobile" if is_mobile else "desktop",
-        "cors_enabled": True
+        "mobile_compatible": True
     }
 
 @router.post("/verify-token")
@@ -303,8 +288,7 @@ async def verify_user_token(current_user: PersonRecord = Depends(get_current_use
             "staff_id": current_user.staff_id,
             "role": get_role_from_staff_id(current_user.staff_id),
             "first_name": current_user.first_name,
-            "last_name": current_user.last_name,
-            "mobile_compatible": True
+            "last_name": current_user.last_name
         }
         
     except Exception as e:
@@ -314,28 +298,16 @@ async def verify_user_token(current_user: PersonRecord = Depends(get_current_use
             detail="Invalid or expired token"
         )
 
-# ADDITIONAL MOBILE DEBUGGING ENDPOINTS
-
-@router.get("/debug/headers")
+@router.get("/debug-headers")
 async def debug_headers(request: Request):
-    """Debug endpoint to inspect request headers from mobile"""
+    """
+    Debug endpoint to check request headers for mobile troubleshooting
+    """
     return {
         "headers": dict(request.headers),
+        "client_host": request.client.host if request.client else "unknown",
         "method": request.method,
         "url": str(request.url),
-        "client": str(request.client) if request.client else None,
-        "user_agent": request.headers.get("user-agent", "Not provided")
+        "mobile_detected": is_mobile_browser(request.headers.get("user-agent", "")),
+        "timestamp": datetime.utcnow().isoformat()
     }
-
-@router.options("/login")
-async def login_options():
-    """Handle preflight OPTIONS request for login endpoint"""
-    return JSONResponse(
-        content={"message": "OPTIONS OK"},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Max-Age": "3600"
-        }
-    )

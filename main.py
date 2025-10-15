@@ -3,24 +3,16 @@ RelishAgro Backend - CORRECTED Mobile-Compatible Main Application
 This file is corrected to work with the ACTUAL database.py structure
 """
 
-from fastapi import FastAPI, HTTPException, Depends, status, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
 import logging
-from dotenv import load_dotenv
 from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Load environment variables
-load_dotenv()
-
-# CORRECTED: Import from actual database.py structure
-from database import get_db, test_connection, init_db, engine
 
 # Create FastAPI app
 app = FastAPI(
@@ -31,98 +23,36 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# ENHANCED CORS Configuration for Mobile Compatibility
+# ✅ CORRECTED CORS: Wildcard for mobile data compatibility
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001", 
-        "http://localhost:5173",  # Vite dev server
-        "https://relishagro.vercel.app",  # Production frontend
-        "https://relishagro-*.vercel.app",  # Preview deployments
-        "https://*.vercel.app",  # All Vercel domains
-        "https://relishagrobackend-production.up.railway.app",  # Backend
-        "*"  # TEMPORARY: Allow all origins for mobile testing (tighten after mobile works)
-    ],
+    allow_origins=["*"],  # ✅ Allow all origins for mobile data
     allow_credentials=True,
-    allow_methods=[
-        "GET", 
-        "POST", 
-        "PUT", 
-        "DELETE", 
-        "OPTIONS", 
-        "PATCH",
-        "HEAD"  # Mobile compatibility
-    ],
-    allow_headers=[
-        "Accept",
-        "Accept-Language", 
-        "Content-Language",
-        "Content-Type",
-        "Authorization",
-        "X-Requested-With",
-        "X-CSRFToken",
-        "User-Agent",
-        "Referer",
-        "Origin",
-        "DNT",
-        "Cache-Control",
-        "X-Mx-ReqToken",
-        "Keep-Alive",
-        "If-Modified-Since",
-        "X-Forwarded-For",  # Mobile proxy headers
-        "X-Forwarded-Proto",
-        "X-Real-IP",
-        "*"  # Allow all headers for mobile compatibility
-    ],
-    expose_headers=["*"]
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=86400,  # Cache preflight for 24 hours (mobile optimization)
 )
 
-# Mobile compatibility middleware
-@app.middleware("http")
-async def mobile_compatibility_middleware(request: Request, call_next):
-    """Custom middleware for mobile browser compatibility"""
-    
-    # Log request details for debugging
-    logger.info(f"📱 {request.method} {request.url.path}")
-    logger.info(f"User-Agent: {request.headers.get('user-agent', 'Unknown')}")
-    
-    # Handle preflight OPTIONS requests
-    if request.method == "OPTIONS":
-        response = JSONResponse(content={"message": "OK"})
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Max-Age"] = "3600"
-        return response
-    
-    # Process request
-    try:
-        response = await call_next(request)
-        
-        # Add mobile-friendly headers
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
-        
-        return response
-        
-    except Exception as e:
-        logger.error(f"Request processing error: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"detail": f"Internal server error: {str(e)}"}
-        )
+# ✅ OPTIONS handler for preflight requests (critical for mobile)
+@app.options("/{full_path:path}")
+async def options_handler(full_path: str):
+    """Handle all OPTIONS requests for CORS preflight"""
+    return JSONResponse(
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Max-Age": "86400",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
 
-# Security
-security = HTTPBearer()
-
-# ROOT ENDPOINT - Mobile Fix: Handle direct URL access
+# ROOT ENDPOINT
 @app.get("/")
 async def root():
-    """Root endpoint - handles direct backend URL access from mobile browsers"""
+    """Root endpoint"""
     return {
         "status": "ok",
         "message": "RelishAgro Backend API",
@@ -137,22 +67,19 @@ async def root():
 # HEALTH CHECK ENDPOINT
 @app.get("/health")
 async def health_check():
-    """Health check endpoint with database connectivity test"""
-    db_status = "connected" if test_connection() else "disconnected"
-    
+    """Health check endpoint"""
     return {
         "status": "healthy",
-        "database": db_status,
         "timestamp": datetime.utcnow().isoformat(),
         "version": "1.0.0",
         "mobile_compatible": True,
         "cors_enabled": True
     }
 
-# MOBILE TEST ENDPOINTS
+# MOBILE TEST ENDPOINT
 @app.get("/mobile-test")
 async def mobile_test():
-    """Test endpoint specifically for mobile connectivity"""
+    """Test endpoint for mobile connectivity"""
     return {
         "mobile_test": "success",
         "message": "Mobile backend connection working",
@@ -160,29 +87,7 @@ async def mobile_test():
         "timestamp": datetime.utcnow().isoformat()
     }
 
-@app.post("/mobile-test")
-async def mobile_test_post(data: dict = None):
-    """Test POST endpoint for mobile"""
-    return {
-        "mobile_post_test": "success",
-        "received_data": data,
-        "message": "Mobile POST request working"
-    }
-
-# CORS test endpoint
-@app.get("/api/cors-test")
-async def cors_test():
-    """CORS test endpoint"""
-    return {
-        "message": "CORS is working!",
-        "allowed_origins": [
-            "https://relishagro.vercel.app",
-            "http://localhost:3000"
-        ],
-        "mobile_compatible": True
-    }
-
-# Import and include routers with error handling
+# Route Registration with Error Handling
 try:
     from routes import auth
     app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
@@ -249,7 +154,7 @@ except ImportError as e:
 # Custom error handlers
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc: HTTPException):
-    """Custom 404 handler with mobile debugging info"""
+    """Custom 404 handler"""
     logger.warning(f"404 Error: {request.method} {request.url}")
     return JSONResponse(
         status_code=404,
@@ -257,33 +162,7 @@ async def not_found_handler(request: Request, exc: HTTPException):
             "detail": "Endpoint not found",
             "requested_path": str(request.url.path),
             "method": request.method,
-            "available_endpoints": [
-                "/api/auth/login",
-                "/api/auth/me",
-                "/api/workers",
-                "/api/job-types",
-                "/api/provisions",
-                "/api/onboarding",
-                "/health",
-                "/docs"
-            ],
             "mobile_debug": True
-        }
-    )
-
-@app.exception_handler(405)
-async def method_not_allowed_handler(request: Request, exc: HTTPException):
-    """Custom 405 handler for method not allowed errors"""
-    logger.warning(f"405 Error: {request.method} {request.url}")
-    return JSONResponse(
-        status_code=405,
-        content={
-            "detail": "Method not allowed",
-            "requested_method": request.method,
-            "requested_path": str(request.url.path),
-            "allowed_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "mobile_debug": True,
-            "suggestion": "Check if you're using the correct HTTP method"
         }
     )
 
@@ -300,64 +179,14 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         }
     )
 
-# Authentication dependency (keeping your original logic)
-async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Verify JWT token"""
-    try:
-        # Your existing token verification logic
-        # For now, return a mock user - replace with actual auth logic
-        return {"user_id": "1", "username": "admin"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-# Protected route example
-@app.get("/api/protected")
-async def protected_route(current_user: dict = Depends(verify_token)):
-    """Protected route example"""
-    return {
-        "message": "This is a protected route",
-        "user": current_user,
-        "mobile_compatible": True
-    }
-
-# Environment info (for debugging - remove in production)
-@app.get("/api/env-info")
-async def env_info():
-    """Environment information for debugging"""
-    return {
-        "database_url": "***" if os.getenv("DATABASE_URL") else "Not set",
-        "supabase_url": "***" if os.getenv("SUPABASE_URL") else "Not set",
-        "supabase_key": "***" if os.getenv("SUPABASE_ANON_KEY") else "Not set",
-        "jwt_secret": "***" if os.getenv("JWT_SECRET") else "Not set",
-        "environment": os.getenv("ENVIRONMENT", "development"),
-        "port": os.getenv("PORT", "8080"),
-        "mobile_compatible": True
-    }
-
 # STARTUP EVENT
 @app.on_event("startup")
 async def startup_event():
     """Startup event handler"""
     logger.info("🚀 RelishAgro Backend started successfully!")
     logger.info("📱 Mobile compatibility features enabled")
-    logger.info("🔐 Authentication system ready")
-    logger.info("🌐 CORS configured for production")
-    logger.info(f"🚂 Platform: Railway (Port: {os.getenv('PORT', '8080')})")
-    logger.info("📱 Mobile data connectivity: ENABLED")
-    logger.info("🌐 CORS configuration: ALL NETWORKS")
+    logger.info("🌐 CORS configured for all networks")
     logger.info("📖 API Documentation: /docs")
-    logger.info("🔍 Alternative docs: /redoc")
-    logger.info("📱 Mobile test endpoint: /mobile-test")
-    
-    # Initialize database if needed
-    try:
-        init_db()
-    except Exception as e:
-        logger.warning(f"Database initialization warning: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -366,16 +195,12 @@ async def shutdown_event():
 
 if __name__ == "__main__":
     import uvicorn
-    
-    # Get port from environment (Railway uses PORT)
     port = int(os.environ.get("PORT", 8080))
-    
     logger.info(f"🚂 Starting on Railway port: {port}")
-    
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=port,
-        reload=False,  # Disable reload in production
+        reload=False,
         log_level="info"
     )

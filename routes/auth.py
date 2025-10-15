@@ -1,6 +1,7 @@
 """
-RelishAgro Backend - MOBILE-COMPATIBLE Authentication
+RelishAgro Backend - CORRECTED Mobile-Compatible Authentication
 Staff ID only authentication with comprehensive mobile browser support
+CORRECTED to work with actual database.py structure
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status, Request
@@ -13,6 +14,7 @@ from typing import Optional
 import jwt
 import logging
 
+# CORRECTED: Import from actual database structure
 from database import get_db
 from models.person import PersonRecord
 
@@ -39,7 +41,7 @@ class LoginResponse(BaseModel):
     first_name: str
     last_name: str
     expires_in: int
-    mobile_compatible: bool = True  # Mobile compatibility flag
+    mobile_compatible: bool = True
 
 class UserResponse(BaseModel):
     staff_id: str
@@ -142,7 +144,7 @@ async def login(login_data: LoginRequest, request: Request, db: Session = Depend
         is_mobile = is_mobile_browser(user_agent)
         
         # Log detailed request information for mobile debugging
-        logging.info(f"Login attempt from {'mobile' if is_mobile else 'desktop'}")
+        logging.info(f"🔐 Login attempt from {'mobile' if is_mobile else 'desktop'}")
         logging.info(f"User-Agent: {user_agent}")
         logging.info(f"Client IP: {request.client.host if request.client else 'unknown'}")
         logging.info(f"Staff ID: {login_data.staff_id}")
@@ -153,7 +155,7 @@ async def login(login_data: LoginRequest, request: Request, db: Session = Depend
         ).first()
         
         if not user:
-            logging.warning(f"Login failed - Invalid staff_id: {login_data.staff_id}")
+            logging.warning(f"❌ Login failed - Invalid staff_id: {login_data.staff_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid staff ID. User not found."
@@ -262,7 +264,7 @@ async def logout(current_user: PersonRecord = Depends(get_current_user)):
     Logout current user (token-based, so client should discard token)
     """
     try:
-        logging.info(f"User {current_user.staff_id} logged out")
+        logging.info(f"🚪 User {current_user.staff_id} logged out")
         return {"message": "Logged out successfully", "mobile_compatible": True}
         
     except Exception as e:

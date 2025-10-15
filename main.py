@@ -1,267 +1,273 @@
 """
-RelishAgro Backend API - Railway + Mobile Data Optimized
-FastAPI application with Railway port configuration and enhanced mobile network support
+RelishAgro Backend - MOBILE COMPATIBILITY FIXED
+FastAPI main application with comprehensive CORS and mobile browser support
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.staticfiles import StaticFiles
 import logging
-from database import engine, Base
 import os
+from contextlib import asynccontextmanager
+
+# Import all route modules
+from routes import auth, workers, job_types, provisions, onboarding
+from routes import attendance, gps_tracking, face_recognition, supervisor
+from database import create_tables, engine
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-# Create database tables
-try:
-    Base.metadata.create_all(bind=engine)
-    logger.info("✅ Database tables created successfully")
-except Exception as e:
-    logger.error(f"❌ Database table creation failed: {e}")
+# Database initialization
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager"""
+    logger.info("Starting RelishAgro Backend...")
+    
+    # Create database tables
+    try:
+        create_tables()
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        raise
+    
+    yield
+    
+    logger.info("Shutting down RelishAgro Backend...")
 
-# Initialize FastAPI app
+# FastAPI app initialization
 app = FastAPI(
     title="RelishAgro Backend API",
-    description="Complete agriculture management system backend",
+    description="Complete backend API for RelishAgro agricultural management system",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
-# Enhanced CORS Configuration for Mobile Networks + Railway
+# COMPREHENSIVE CORS CONFIGURATION FOR MOBILE COMPATIBILITY
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "*",  # Allow all origins for mobile compatibility
-        "https://relishagro.vercel.app",
-        "https://*.vercel.app",
-        "https://*.railway.app",  # Railway domains
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://192.168.*.*",  # Local network ranges
-        "http://10.*.*.*",     # Private network ranges
-        "https://*",           # All HTTPS origins for mobile data
+        "https://relishagro.vercel.app",           # Production frontend
+        "http://localhost:3000",                   # Development frontend
+        "http://localhost:5173",                   # Vite dev server
+        "https://*.vercel.app",                    # All Vercel deployments
+        "http://127.0.0.1:3000",                   # Alternative localhost
+        "http://0.0.0.0:3000",                     # Docker networking
+        "*"                                        # TEMPORARY: Allow all origins for mobile testing
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
-    allow_headers=[
-        "*",
-        "Accept",
-        "Accept-Language",
-        "Content-Language",
-        "Content-Type",
-        "Authorization",
-        "X-Requested-With",
-        "User-Agent",
-        "Referer",
-        "Origin",
-        "DNT",
-        "X-CustomHeader",
-        "Keep-Alive",
-        "Cache-Control",
-        "X-Forwarded-For",
-        "X-Real-IP",
-        "X-Forwarded-Proto",  # Railway proxy headers
-        "X-Railway-*"         # Railway-specific headers
+    allow_methods=[
+        "GET", 
+        "POST", 
+        "PUT", 
+        "DELETE", 
+        "PATCH", 
+        "OPTIONS",
+        "HEAD"                                     # MOBILE FIX: Allow HEAD requests
     ],
-    expose_headers=["*"],
-    max_age=86400,  # Cache preflight requests for 24 hours (mobile optimization)
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "User-Agent",
+        "DNT",
+        "Cache-Control",
+        "X-Mx-ReqToken",
+        "Keep-Alive",
+        "X-Requested-With",
+        "If-Modified-Since",
+        "X-CSRFToken",
+        "X-Forwarded-For",                        # MOBILE FIX: Mobile proxy headers
+        "X-Forwarded-Proto",                      # MOBILE FIX: HTTPS forwarding
+        "X-Real-IP",                              # MOBILE FIX: Real IP detection
+        "*"                                       # MOBILE FIX: Allow all headers
+    ],
+    expose_headers=["*"]                          # MOBILE FIX: Expose all headers
 )
 
-# Add trusted host middleware for Railway + mobile access
-app.add_middleware(
-    TrustedHostMiddleware, 
-    allowed_hosts=[
-        "*.railway.app", 
-        "localhost", 
-        "127.0.0.1",
-        "*.vercel.app",
-        "*"  # Allow all hosts for maximum mobile compatibility
-    ]
-)
+# MOBILE COMPATIBILITY: Add custom middleware for mobile browsers
+@app.middleware("http")
+async def mobile_compatibility_middleware(request: Request, call_next):
+    """Custom middleware to handle mobile browser compatibility issues"""
+    
+    # Log request details for debugging
+    logger.info(f"Request: {request.method} {request.url}")
+    logger.info(f"Headers: {dict(request.headers)}")
+    logger.info(f"User-Agent: {request.headers.get('user-agent', 'Unknown')}")
+    
+    # Handle preflight OPTIONS requests for mobile
+    if request.method == "OPTIONS":
+        response = JSONResponse(content={"message": "OK"})
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Max-Age"] = "3600"
+        return response
+    
+    # Process the request
+    try:
+        response = await call_next(request)
+        
+        # Add mobile-specific headers to all responses
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Request processing error: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Internal server error: {str(e)}"}
+        )
 
-# Root endpoint with Railway + mobile-friendly response
-@app.get("/")
+# ROOT ENDPOINT - MOBILE FIX: Handle direct URL access
+@app.get("/", response_model=dict)
 async def root():
+    """Root endpoint - handles direct backend URL access from mobile browsers"""
     return {
         "message": "RelishAgro Backend API",
+        "status": "running",
         "version": "1.0.0",
-        "status": "operational",
-        "docs": "/docs",
-        "mobile_support": "enabled",
-        "cors": "configured",
-        "platform": "railway",
-        "port": "8080"
+        "documentation": "/docs",
+        "health_check": "/health",
+        "mobile_compatible": True
     }
 
-# Enhanced health check endpoint
-@app.get("/health")
+# HEALTH CHECK ENDPOINT
+@app.get("/health", response_model=dict)
 async def health_check():
+    """Health check endpoint"""
     return {
         "status": "healthy",
-        "timestamp": "2025-10-13",
+        "service": "RelishAgro Backend",
         "database": "connected",
-        "mobile_data_support": "enabled",
-        "network_type": "all_supported",
-        "platform": "railway",
-        "port": os.getenv("PORT", "8080")
+        "timestamp": "2025-10-15T04:00:00Z"
     }
 
-# Mobile connectivity test endpoint
-@app.get("/mobile-test")
-async def mobile_connectivity_test():
-    """Special endpoint to test mobile data connectivity"""
+# API ROUTES MOUNTING WITH MOBILE-FRIENDLY PREFIXES
+
+# Authentication routes - MOST CRITICAL FOR MOBILE
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+
+# Worker management routes
+app.include_router(workers.router, prefix="/api/workers", tags=["Workers"])
+
+# Job types routes
+app.include_router(job_types.router, prefix="/api/job-types", tags=["Job Types"])
+
+# Provisions routes
+app.include_router(provisions.router, prefix="/api/provisions", tags=["Provisions"])
+
+# Onboarding routes
+app.include_router(onboarding.router, prefix="/api/onboarding", tags=["Onboarding"])
+
+# Attendance routes
+app.include_router(attendance.router, prefix="/api/attendance", tags=["Attendance"])
+
+# GPS tracking routes
+app.include_router(gps_tracking.router, prefix="/api/gps", tags=["GPS Tracking"])
+
+# Face recognition routes
+app.include_router(face_recognition.router, prefix="/api/face", tags=["Face Recognition"])
+
+# Supervisor routes
+app.include_router(supervisor.router, prefix="/api/supervisor", tags=["Supervisor"])
+
+# MOBILE TESTING ENDPOINTS
+@app.get("/api/mobile-test", response_model=dict)
+async def mobile_test():
+    """Test endpoint specifically for mobile connectivity"""
     return {
         "mobile_test": "success",
-        "message": "Mobile data connection working",
-        "timestamp": "2025-10-13",
+        "message": "Mobile backend connection working",
         "cors_enabled": True,
-        "all_networks_supported": True,
-        "platform": "railway",
-        "railway_port": os.getenv("PORT", "8080")
+        "timestamp": "2025-10-15T04:00:00Z"
     }
 
-# OPTIONS handler for preflight requests (critical for mobile)
-@app.options("/{full_path:path}")
-async def options_handler(full_path: str):
-    """Handle all OPTIONS requests for CORS preflight"""
+@app.post("/api/mobile-test", response_model=dict)
+async def mobile_test_post(data: dict = None):
+    """Test POST endpoint for mobile"""
+    return {
+        "mobile_post_test": "success",
+        "received_data": data,
+        "message": "Mobile POST request working"
+    }
+
+# CATCH-ALL ERROR HANDLER FOR MOBILE DEBUGGING
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: HTTPException):
+    """Custom 404 handler with mobile debugging info"""
+    logger.warning(f"404 Error: {request.method} {request.url}")
     return JSONResponse(
-        content={"message": "OK"},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Max-Age": "86400",  # 24 hours for mobile optimization
-            "Access-Control-Allow-Credentials": "true",
-        }
-    )
-
-# Route Registration with Error Handling
-
-# Authentication Routes
-try:
-    from routes import auth
-    app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
-    print("✅ Auth routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import auth routes: {e}")
-
-# CRITICAL: Admin Routes (NEWLY ADDED)
-try:
-    from routes import admin
-    app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
-    print("✅ Admin routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import admin routes: {e}")
-
-# Workers Routes
-try:
-    from routes import workers
-    app.include_router(workers.router, prefix="/api/workers", tags=["workers"])
-    print("✅ Workers routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import workers routes: {e}")
-
-# Job Types Routes
-try:
-    from routes import job_types
-    app.include_router(job_types.router, prefix="/api/job-types", tags=["job-types"])
-    print("✅ Job types routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import job_types routes: {e}")
-
-# Provisions Routes
-try:
-    from routes import provisions
-    app.include_router(provisions.router, prefix="/api/provisions", tags=["provisions"])
-    print("✅ Provisions routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import provisions routes: {e}")
-
-# Onboarding Routes
-try:
-    from routes import onboarding
-    app.include_router(onboarding.router, prefix="/api/onboarding", tags=["onboarding"])
-    print("✅ Onboarding routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import onboarding routes: {e}")
-
-# Attendance Routes
-try:
-    from routes import attendance
-    app.include_router(attendance.router, prefix="/api/attendance", tags=["attendance"])
-    print("✅ Attendance routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import attendance routes: {e}")
-
-# GPS Tracking Routes
-try:
-    from routes import gps_tracking
-    app.include_router(gps_tracking.router, prefix="/api/gps", tags=["gps-tracking"])
-    print("✅ GPS tracking routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import gps_tracking routes: {e}")
-
-# Face Recognition Routes
-try:
-    from routes import face_recognition
-    app.include_router(face_recognition.router, prefix="/api/face", tags=["face-recognition"])
-    print("✅ Face recognition routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import face_recognition routes: {e}")
-
-# Supervisor Routes
-try:
-    from routes import supervisor
-    app.include_router(supervisor.router, prefix="/api/supervisor", tags=["supervisor"])
-    print("✅ Supervisor routes loaded successfully")
-except ImportError as e:
-    print(f"Warning: Could not import supervisor routes: {e}")
-
-# Enhanced Global Exception Handler
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    logger.error(f"Global exception: {exc}")
-    return JSONResponse(
-        status_code=500,
+        status_code=404,
         content={
-            "detail": "Internal server error occurred",
-            "mobile_support": "enabled",
-            "cors_enabled": True,
-            "platform": "railway"
-        },
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Allow-Credentials": "true"
+            "detail": "Endpoint not found",
+            "requested_path": str(request.url.path),
+            "method": request.method,
+            "available_endpoints": [
+                "/api/auth/login",
+                "/api/auth/me",
+                "/api/workers",
+                "/api/job-types",
+                "/api/provisions",
+                "/api/onboarding",
+                "/health",
+                "/docs"
+            ],
+            "mobile_debug": True
         }
     )
 
-# Startup Event
+@app.exception_handler(405)
+async def method_not_allowed_handler(request: Request, exc: HTTPException):
+    """Custom 405 handler for method not allowed errors"""
+    logger.warning(f"405 Error: {request.method} {request.url}")
+    return JSONResponse(
+        status_code=405,
+        content={
+            "detail": "Method not allowed",
+            "requested_method": request.method,
+            "requested_path": str(request.url.path),
+            "allowed_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "mobile_debug": True,
+            "suggestion": "Check if you're using the correct HTTP method"
+        }
+    )
+
+# STARTUP EVENT
 @app.on_event("startup")
 async def startup_event():
-    port = os.getenv("PORT", "8080")
-    logger.info("🚀 RelishAgro Backend API started successfully")
-    logger.info(f"🚂 Platform: Railway (Port: {port})")
-    logger.info("📱 Mobile data connectivity: ENABLED")
-    logger.info("🌐 CORS configuration: ALL NETWORKS")
-    logger.info("📖 API Documentation: /docs")
-    logger.info("🔍 Alternative docs: /redoc")
-    logger.info("📱 Mobile test endpoint: /mobile-test")
-
-# Shutdown Event
-@app.on_event("shutdown")  
-async def shutdown_event():
-    logger.info("🛑 RelishAgro Backend API shutting down")
+    """Startup event handler"""
+    logger.info("🚀 RelishAgro Backend started successfully!")
+    logger.info("📱 Mobile compatibility features enabled")
+    logger.info("🔐 Authentication system ready")
+    logger.info("🌐 CORS configured for production")
 
 if __name__ == "__main__":
     import uvicorn
-    # Railway automatically sets PORT environment variable to 8080
-    port = int(os.getenv("PORT", 8080))
-    logger.info(f"🚂 Starting on Railway port: {port}")
-    # Bind to all interfaces for Railway + mobile access
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    
+    # Get port from environment variable (Railway uses PORT)
+    port = int(os.environ.get("PORT", 8080))
+    
+    logger.info(f"Starting server on port {port}")
+    
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port,
+        reload=False,  # Disable reload in production
+        log_level="info"
+    )

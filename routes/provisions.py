@@ -11,7 +11,7 @@ import uuid
 router = APIRouter(tags=["provisions"])
 notification_service = NotificationService()
 
-@router.post("/provisions/request")
+@router.post("/request")
 async def create_provision_request(
     request_type: str = Form(...),
     description: str = Form(...),

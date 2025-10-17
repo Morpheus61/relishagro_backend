@@ -24,7 +24,7 @@ class OnboardingSubmission(BaseModel):
     aadhaar: Optional[str] = None
     is_seasonal: bool = False
 
-@router.post("/onboarding/submit")
+@router.post("/submit")
 async def submit_onboarding(
     first_name: str = Form(...),
     last_name: str = Form(...),

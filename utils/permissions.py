@@ -4,9 +4,13 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import PersonRecord
 from typing import List
-import uuid
+import jwt
 
 security = HTTPBearer()
+
+# JWT Configuration (should match auth.py)
+SECRET_KEY = "your-secret-key-here"
+ALGORITHM = "HS256"
 
 ROLE_DISPLAY_NAMES = {
     "admin": "Administrator",
@@ -42,47 +46,85 @@ ROLE_PERMISSIONS = {
     ]
 }
 
+# Role mapping: JWT role -> Database person_type
+ROLE_MAPPING = {
+    "Admin": "admin",
+    "HarvestFlow": "harvestflow_manager",
+    "FlavorCore": "flavorcore_manager",
+    "Supervisor": "flavorcore_supervisor",
+    "Worker": "worker",
+    "Vendor": "vendor",
+    "Driver": "driver"
+}
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> PersonRecord:
     """
-    Get current authenticated user from token.
-    For production, implement proper JWT validation.
+    Get current authenticated user from JWT token.
     """
     try:
-        # Extract staff_id from token (simplified for now)
-        # In production: decode JWT, verify signature, check expiry
-        staff_id = credentials.credentials
+        # Decode JWT token
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        staff_id = payload.get("sub")
         
-        user = db.query(PersonRecord).filter(
-            PersonRecord.staff_id == staff_id,
-            PersonRecord.status == "active"
-        ).first()
-        
-        if not user:
+        if staff_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid authentication credentials"
             )
         
+        user = db.query(PersonRecord).filter(
+            PersonRecord.staff_id == staff_id
+        ).first()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
+        
         return user
         
-    except Exception:
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired"
+        )
+    except jwt.JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials"
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed"
         )
 
 def require_role(allowed_roles: List[str]):
     """
     Dependency to check if user has required role.
-    Usage: require_role(["admin", "harvestflow_manager"])
+    Handles both capitalized JWT roles and lowercase database person_types.
+    Usage: require_role(["admin", "Admin", "harvestflow_manager"])
     """
     async def role_checker(
         current_user: PersonRecord = Depends(get_current_user)
     ) -> PersonRecord:
-        if current_user.person_type not in allowed_roles:
+        # Normalize allowed roles to lowercase
+        normalized_allowed_roles = []
+        for role in allowed_roles:
+            # If role is in ROLE_MAPPING (capitalized), convert to person_type
+            if role in ROLE_MAPPING:
+                normalized_allowed_roles.append(ROLE_MAPPING[role])
+            else:
+                # Already lowercase person_type format
+                normalized_allowed_roles.append(role.lower())
+        
+        # Check if user's person_type matches any allowed role
+        if current_user.person_type not in normalized_allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access denied. Required role: {', '.join(allowed_roles)}"

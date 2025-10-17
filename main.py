@@ -121,8 +121,8 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(admin.router, prefix="/api", tags=["Admin"])
 app.include_router(workers.router, prefix="/api/workers", tags=["Workers"])
 app.include_router(job_types.router, prefix="/api", tags=["Job Types"])
-app.include_router(provisions.router, prefix="/api", tags=["Provisions"])  # Routes have full paths
-app.include_router(onboarding.router, prefix="/api", tags=["Onboarding"])  # Routes have full paths
+app.include_router(provisions.router, prefix="/api/provisions", tags=["Provisions"])
+app.include_router(onboarding.router, prefix="/api/onboarding", tags=["Onboarding"])
 app.include_router(attendance.router, prefix="/api", tags=["Attendance"])
 app.include_router(face_recognition.router, prefix="/api", tags=["Face Recognition"])
 app.include_router(gps_tracking.router, prefix="/api", tags=["GPS Tracking"])

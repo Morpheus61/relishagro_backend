@@ -11,7 +11,7 @@ import uuid
 router = APIRouter(tags=["provisions"])
 notification_service = NotificationService()
 
-@router.post("/request")  # ✅ FIXED: Removed /provisions prefix
+@router.post("/request")
 async def create_provision_request(
     request_type: str = Form(...),
     description: str = Form(...),
@@ -59,7 +59,7 @@ async def create_provision_request(
 @router.get("/pending")
 async def get_pending_requests(
     db: Session = Depends(get_db),
-    current_user: PersonRecord = Depends(require_role(["flavorcore_manager", "admin"]))
+    current_user: PersonRecord = Depends(require_role(["flavorcore_manager", "Admin"]))  # ✅ Changed from "admin" to "Admin"
 ):
     """Get pending provision requests"""
     
@@ -147,7 +147,7 @@ async def approve_provision_request(
     request_id: str,
     vendor_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
-    current_user: PersonRecord = Depends(require_role(["admin"]))
+    current_user: PersonRecord = Depends(require_role(["Admin"]))  # ✅ Changed from "admin" to "Admin"
 ):
     """Admin gives final approval and assigns to vendor"""
     

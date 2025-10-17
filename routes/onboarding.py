@@ -106,7 +106,7 @@ async def submit_onboarding(
 @router.get("/pending")
 async def get_pending_onboarding(
     db: Session = Depends(get_db),
-    current_user: PersonRecord = Depends(require_role(["admin"]))
+    current_user: PersonRecord = Depends(require_role(["Admin"]))
 ):
     """Get all pending onboarding requests (Admin only)"""
     
@@ -136,7 +136,7 @@ async def get_pending_onboarding(
 async def approve_onboarding(
     onboarding_id: str,
     db: Session = Depends(get_db),
-    current_user: PersonRecord = Depends(require_role(["admin"]))
+    current_user: PersonRecord = Depends(require_role(["Admin"]))
 ):
     """
     Admin approves onboarding request.
@@ -230,7 +230,7 @@ async def reject_onboarding(
     onboarding_id: str,
     reason: str = Form(...),
     db: Session = Depends(get_db),
-    current_user: PersonRecord = Depends(require_role(["admin"]))
+    current_user: PersonRecord = Depends(require_role(["Admin"]))
 ):
     """Admin rejects onboarding request"""
     

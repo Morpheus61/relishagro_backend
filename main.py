@@ -192,17 +192,17 @@ async def root():
         "health": "/health"
     }
 
-# Include all route modules
+# Include all route modules - FIXED PREFIXES
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(admin.router, prefix="/api", tags=["Admin"])
-app.include_router(workers.router, prefix="/api", tags=["Workers"])
-app.include_router(job_types.router, prefix="/api", tags=["Job Types"])
-app.include_router(provisions.router, prefix="/api", tags=["Provisions"])
-app.include_router(onboarding.router, prefix="/api", tags=["Onboarding"])
-app.include_router(attendance.router, prefix="/api", tags=["Attendance"])
-app.include_router(face_recognition.router, prefix="/api", tags=["Face Recognition"])
-app.include_router(gps_tracking.router, prefix="/api", tags=["GPS Tracking"])
-app.include_router(supervisor.router, prefix="/api", tags=["Supervisor"])
+app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
+app.include_router(workers.router, prefix="/api/workers", tags=["Workers"])  # ✅ FIXED
+app.include_router(job_types.router, prefix="/api", tags=["Job Types"])  # Already correct
+app.include_router(provisions.router, prefix="/api/provisions", tags=["Provisions"])  # ✅ FIXED
+app.include_router(onboarding.router, prefix="/api/onboarding", tags=["Onboarding"])  # ✅ FIXED
+app.include_router(attendance.router, prefix="/api/attendance", tags=["Attendance"])  # ✅ FIXED
+app.include_router(face_recognition.router, prefix="/api/face", tags=["Face Recognition"])  # ✅ FIXED
+app.include_router(gps_tracking.router, prefix="/api/gps", tags=["GPS Tracking"])  # Already has /gps prefix
+app.include_router(supervisor.router, prefix="/api/supervisor", tags=["Supervisor"])  # ✅ FIXED
 
 # Startup message
 @app.on_event("startup")

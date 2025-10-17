@@ -11,7 +11,7 @@ import uuid
 router = APIRouter(tags=["provisions"])
 notification_service = NotificationService()
 
-@router.post("/request")
+@router.post("/request")  # ✅ FIXED: Removed /provisions prefix
 async def create_provision_request(
     request_type: str = Form(...),
     description: str = Form(...),
@@ -20,10 +20,7 @@ async def create_provision_request(
     db: Session = Depends(get_db),
     current_user: PersonRecord = Depends(require_role(["harvestflow_manager"]))
 ):
-    """
-    HarvestFlow Manager creates provision request.
-    Workflow: HF Manager → FC Manager → Admin → Vendor
-    """
+    """HarvestFlow Manager creates provision request."""
     
     provision = ProvisionRequest(
         request_type=request_type,
@@ -39,7 +36,6 @@ async def create_provision_request(
     db.commit()
     db.refresh(provision)
     
-    # Notify FlavorCore Manager
     fc_managers = db.query(PersonRecord).filter(
         PersonRecord.person_type == "flavorcore_manager",
         PersonRecord.status == "active"
@@ -74,7 +70,7 @@ async def get_pending_requests(
             ProvisionRequest.status == "pending",
             ProvisionRequest.reviewed_by_fc_manager.is_(None)
         )
-    else:  # admin
+    else:
         query = query.filter(
             ProvisionRequest.status == "pending",
             ProvisionRequest.reviewed_by_fc_manager.isnot(None),
@@ -127,7 +123,6 @@ async def review_provision_request(
     
     db.commit()
     
-    # Notify Admin
     admins = db.query(PersonRecord).filter(
         PersonRecord.person_type == "admin",
         PersonRecord.status == "active"

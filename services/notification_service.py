@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from models import Notification, PersonRecord
 from config import settings
 import uuid
-from datetime import datetime
+from datetime import datetime, date  # ADDED 'date' import here
 from database import get_db_connection
 import asyncpg
 
@@ -511,7 +511,7 @@ class NotificationService:
     
     async def notify_daily_summary(
         self,
-        summary_date: date,
+        summary_date: date,  # This was causing the error - now fixed with import
         total_workers: int,
         total_lots: int,
         total_production: float

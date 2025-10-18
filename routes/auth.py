@@ -18,12 +18,68 @@ supabase: Client = create_client(
     os.getenv("SUPABASE_SERVICE_KEY")
 )
 
+# Login request/response models
+class LoginRequest(BaseModel):
+    staff_id: str
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    staff_id: str
+    role: str
+    first_name: str
+    last_name: str
+    expires_in: int = 3600
+
 class UserProfile(BaseModel):
     id: str
     email: str
     role: str
     staff_id: Optional[str] = None
     full_name: Optional[str] = None
+
+@router.post("/login")
+async def login(login_data: LoginRequest):
+    """Login with staff ID"""
+    try:
+        conn = await get_db_connection()
+        
+        # Find user by staff_id in person_records
+        query = """
+        SELECT 
+            staff_id,
+            first_name,
+            last_name, 
+            person_type as role
+        FROM person_records 
+        WHERE staff_id = $1 AND status = 'active'
+        """
+        
+        user = await conn.fetchrow(query, login_data.staff_id)
+        await conn.close()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid staff ID or user not active"
+            )
+        
+        # Create a simple token
+        mock_token = f"mock_token_{uuid.uuid4().hex}"
+        
+        return LoginResponse(
+            access_token=mock_token,
+            staff_id=user['staff_id'],
+            role=user['role'],
+            first_name=user['first_name'] or "",
+            last_name=user['last_name'] or ""
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Login failed: {str(e)}"
+        )
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)

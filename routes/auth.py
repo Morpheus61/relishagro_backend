@@ -1,46 +1,16 @@
-# routes/auth.py
-from fastapi import APIRouter, HTTPException, Depends, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Optional, Dict, Any
-import uuid
-from supabase import create_client, Client
-import os
-from pydantic import BaseModel
-from database import get_db_connection
-import asyncpg
+# Add these imports to auth.py
+import jwt
+from datetime import datetime, timedelta
+import secrets
 
-router = APIRouter()
-security = HTTPBearer()
+# Add JWT secret key (use environment variable in production)
+JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
+JWT_ALGORITHM = "HS256"
 
-# Supabase client initialization
-supabase: Client = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_SERVICE_KEY")
-)
-
-# Login request/response models
-class LoginRequest(BaseModel):
-    staff_id: str
-
-class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    staff_id: str
-    role: str
-    first_name: str
-    last_name: str
-    expires_in: int = 3600
-
-class UserProfile(BaseModel):
-    id: str
-    email: str
-    role: str
-    staff_id: Optional[str] = None
-    full_name: Optional[str] = None
-
+# Update the login endpoint in auth.py
 @router.post("/login")
 async def login(login_data: LoginRequest):
-    """Login with staff ID"""
+    """Login with staff ID - Returns proper JWT token"""
     try:
         conn = await get_db_connection()
         
@@ -64,11 +34,19 @@ async def login(login_data: LoginRequest):
                 detail="Invalid staff ID or user not active"
             )
         
-        # Create a simple token
-        mock_token = f"mock_token_{uuid.uuid4().hex}"
+        # Create JWT token with user data
+        token_data = {
+            "sub": user['staff_id'],
+            "role": user['role'],
+            "first_name": user['first_name'] or "",
+            "last_name": user['last_name'] or "",
+            "exp": datetime.utcnow() + timedelta(hours=24)
+        }
+        
+        token = jwt.encode(token_data, JWT_SECRET, algorithm=JWT_ALGORITHM)
         
         return LoginResponse(
-            access_token=mock_token,
+            access_token=token,
             staff_id=user['staff_id'],
             role=user['role'],
             first_name=user['first_name'] or "",
@@ -81,102 +59,14 @@ async def login(login_data: LoginRequest):
             detail=f"Login failed: {str(e)}"
         )
 
-# ... rest of your existing auth.py code remains the same ...
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> UserProfile:
-    """Get current authenticated user from Supabase"""
+# Add a token verification endpoint
+@router.post("/verify-token")
+async def verify_token(token: str = Depends(security)):
+    """Verify JWT token"""
     try:
-        # Verify the JWT token with Supabase
-        user_data = supabase.auth.get_user(credentials.credentials)
-        
-        if not user_data.user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials"
-            )
-        
-        # Get additional user profile from person_records
-        user_profile = await get_user_profile(user_data.user.id)
-        
-        return UserProfile(
-            id=user_data.user.id,
-            email=user_data.user.email,
-            role=user_profile.get("role", "staff"),
-            staff_id=user_profile.get("staff_id"),
-            full_name=user_profile.get("full_name")
-        )
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Authentication failed: {str(e)}"
-        )
-
-async def get_user_profile(user_id: str) -> Dict[str, Any]:
-    """Get user profile from person_records table"""
-    try:
-        conn = await get_db_connection()
-        query = """
-        SELECT 
-            pr.person_type as role,
-            pr.staff_id,
-            pr.full_name
-        FROM person_records pr
-        WHERE pr.system_account_id = $1
-        """
-        profile = await conn.fetchrow(query, uuid.UUID(user_id))
-        await conn.close()
-        
-        if profile:
-            return {
-                "role": profile['role'],
-                "staff_id": profile['staff_id'],
-                "full_name": profile['full_name']
-            }
-        return {"role": "staff"}
-        
-    except Exception:
-        return {"role": "staff"}
-
-# Role-based access control dependencies
-async def require_admin(user: UserProfile = Depends(get_current_user)):
-    if user.role not in ["admin", "harvestflow_manager"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required"
-        )
-    return user
-
-async def require_supervisor(user: UserProfile = Depends(get_current_user)):
-    allowed_roles = ["supervisor", "flavorcore_supervisor", "admin", "flavorcore_manager"]
-    if user.role not in allowed_roles:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Supervisor privileges required"
-        )
-    return user
-
-async def require_manager(user: UserProfile = Depends(get_current_user)):
-    allowed_roles = ["admin", "harvestflow_manager", "flavorcore_manager", "flavorcore_supervisor"]
-    if user.role not in allowed_roles:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Manager privileges required"
-        )
-    return user
-
-@router.get("/me")
-async def get_current_user_profile(current_user: UserProfile = Depends(get_current_user)):
-    """Get current user profile"""
-    return {
-        "success": True,
-        "data": {
-            "id": current_user.id,
-            "email": current_user.email,
-            "role": current_user.role,
-            "staff_id": current_user.staff_id,
-            "full_name": current_user.full_name
-        },
-        "message": "User profile retrieved successfully"
-    }
+        payload = jwt.decode(token.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return {"valid": True, "user": payload}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")

@@ -6,7 +6,7 @@ import uuid
 from database import get_db_connection
 import asyncpg
 from pydantic import BaseModel
-from routes.auth import get_current_user, require_supervisor, require_manager
+from routes.auth import get_current_user, require_supervisor, require_manager, UserProfile  # Added UserProfile import
 
 router = APIRouter()
 
@@ -24,7 +24,7 @@ class CheckOutRequest(BaseModel):
 @router.post("/check-in")
 async def check_in_attendance(
     attendance_data: AttendanceLogCreate,
-    current_user: UserProfile = Depends(require_supervisor)
+    current_user: UserProfile = Depends(require_supervisor)  # Correct: UserProfile from auth
 ):
     """Record attendance check-in"""
     try:
@@ -66,7 +66,7 @@ async def check_in_attendance(
             attendance_data.location,
             attendance_data.status,
             now,
-            uuid.UUID(current_user.id)
+            uuid.UUID(current_user.id)  # This matches UserProfile.id which is a string
         )
         
         await conn.close()
@@ -93,7 +93,7 @@ async def check_in_attendance(
 @router.post("/check-out")
 async def check_out_attendance(
     checkout_data: CheckOutRequest,
-    current_user: UserProfile = Depends(require_supervisor)
+    current_user: UserProfile = Depends(require_supervisor)  # Correct: UserProfile from auth
 ):
     """Record attendance check-out"""
     try:
@@ -167,7 +167,7 @@ async def check_out_attendance(
 @router.get("/daily-summary")
 async def get_daily_attendance_summary(
     summary_date: date = Query(..., description="Date for summary"),
-    current_user: UserProfile = Depends(require_manager)
+    current_user: UserProfile = Depends(require_manager)  # Correct: UserProfile from auth
 ):
     """Get daily attendance summary"""
     try:
@@ -231,7 +231,7 @@ async def get_person_attendance(
     person_id: str,
     start_date: date = Query(..., description="Start date"),
     end_date: date = Query(..., description="End date"),
-    current_user: UserProfile = Depends(get_current_user)
+    current_user: UserProfile = Depends(get_current_user)  # Correct: UserProfile from auth
 ):
     """Get attendance history for a specific person"""
     try:
@@ -310,7 +310,7 @@ async def get_person_attendance(
 @router.get("/rfid-scans/recent")
 async def get_recent_rfid_scans(
     hours: int = Query(24, description="Hours to look back"),
-    current_user: UserProfile = Depends(require_supervisor)
+    current_user: UserProfile = Depends(require_supervisor)  # Correct: UserProfile from auth
 ):
     """Get recent RFID scans for monitoring"""
     try:

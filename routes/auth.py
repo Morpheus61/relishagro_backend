@@ -81,6 +81,7 @@ async def login(login_data: LoginRequest):
             detail=f"Login failed: {str(e)}"
         )
 
+# ... rest of your existing auth.py code remains the same ...
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> UserProfile:

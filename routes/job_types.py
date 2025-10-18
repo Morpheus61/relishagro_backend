@@ -1,12 +1,12 @@
 # routes/job_types.py
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, date  # ADDED 'date' import
 from database import get_db_connection
 import asyncpg
 from pydantic import BaseModel
 import uuid
-from routes.auth import get_current_user, require_manager
+from routes.auth import get_current_user, require_manager, UserProfile  # ADDED UserProfile import
 
 router = APIRouter()
 
@@ -87,7 +87,7 @@ async def get_job_types():
 @router.post("/job-types")
 async def create_job_type(
     job_type: JobTypeCreate, 
-    current_user: UserProfile = Depends(require_manager)
+    current_user: UserProfile = Depends(require_manager)  # FIXED: UserProfile is now imported
 ):
     """Create a new job type with authenticated user"""
     try:
@@ -161,7 +161,7 @@ async def create_job_type(
 async def get_production_report(
     start_date: date,
     end_date: date,
-    current_user: UserProfile = Depends(require_manager)
+    current_user: UserProfile = Depends(require_manager)  # FIXED: UserProfile is now imported
 ):
     """Get production report with data from multiple tables"""
     try:

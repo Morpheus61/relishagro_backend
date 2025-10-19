@@ -1,10 +1,10 @@
 # routes/auth.py
+import os  # ← ADD THIS LINE AT THE TOP
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Dict, Any
 import uuid
 from supabase import create_client, Client
-import os
 from pydantic import BaseModel
 from database import get_db_connection
 import asyncpg
@@ -21,7 +21,7 @@ supabase: Client = create_client(
     os.getenv("SUPABASE_SERVICE_KEY")
 )
 
-# JWT Configuration - USING YOUR EXISTING ENV VARIABLES
+# JWT Configuration
 JWT_SECRET = os.getenv("SECRET_KEY", "2WJa-_ZdZAAogvRDVwy3T3n826O729i_R85m4F6T2H4")
 JWT_ALGORITHM = os.getenv("ALGORITHM", "HS256")
 

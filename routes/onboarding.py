@@ -8,10 +8,21 @@ import json
 from database import get_db_connection
 import asyncpg
 from pydantic import BaseModel
-from routes.auth import get_current_user, require_admin, require_manager
+from routes.auth import get_current_user, require_admin  # require_manager is not used anymore
 from services.notification_service import notification_service
 
 router = APIRouter()
+
+# --- New dependency: allow Admin or Manager roles ---
+async def require_manager_or_admin(current_user=Depends(get_current_user)):
+    allowed_types = ["admin", "harvestflow_manager", "flavorcore_manager"]
+    if current_user.person_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Only Admins or Managers can view pending onboarding requests."
+        )
+    return current_user
+
 
 class OnboardingRequestCreate(BaseModel):
     first_name: str
@@ -193,7 +204,7 @@ async def create_supplier_vendor_onboarding(conn, first_name, last_name, mobile,
 async def get_pending_onboarding(
     entity_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
-    current_user = Depends(require_manager)
+    current_user = Depends(require_manager_or_admin)  # ✅ FIXED: Now allows Admins
 ):
     """Get all pending onboarding requests"""
     try:

@@ -82,10 +82,15 @@ def get_db() -> Generator[Session, None, None]:
 
 async def get_db_connection():
     """
-    Get raw database connection for complex queries
+    Get raw database connection for complex queries.
+    Disables prepared statement caching to ensure compatibility with PgBouncer
+    in transaction or statement pooling mode (e.g., on Railway).
     """
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        conn = await asyncpg.connect(
+            DATABASE_URL,
+            statement_cache_size=0  # ✅ CRITICAL FIX: Disable prepared statement caching
+        )
         return conn
     except Exception as e:
         logger.error(f"Failed to create database connection: {str(e)}")

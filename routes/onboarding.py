@@ -15,7 +15,7 @@ router = APIRouter()
 
 # --- New dependency: allow Admin or Manager roles ---
 async def require_manager_or_admin(current_user=Depends(get_current_user)):
-    allowed_types = ["admin", "harvestflow_manager", "flavorcore_manager"]
+    allowed_roles = ["admin", "harvestflow_manager", "flavorcore_manager", "supervisor"]
     user_role = current_user.role.lower() if hasattr(current_user, 'role') else ''
     if user_role not in allowed_roles:  # ✅ CORRECT
         raise HTTPException(

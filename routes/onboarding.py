@@ -16,7 +16,8 @@ router = APIRouter()
 # --- New dependency: allow Admin or Manager roles ---
 async def require_manager_or_admin(current_user=Depends(get_current_user)):
     allowed_types = ["admin", "harvestflow_manager", "flavorcore_manager"]
-    if current_user.person_type not in allowed_types:
+    user_role = current_user.role.lower() if hasattr(current_user, 'role') else ''
+    if user_role not in allowed_roles:  # ✅ CORRECT
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied. Only Admins or Managers can view pending onboarding requests."

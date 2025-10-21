@@ -59,7 +59,7 @@ async def create_provision_request(
 @router.get("/pending")
 async def get_pending_requests(
     db: Session = Depends(get_db),
-    current_user: PersonRecord = Depends(require_role(["flavorcore_manager", "Admin"]))  # ✅ Changed from "admin" to "Admin"
+    current_user: PersonRecord = Depends(require_role(["flavorcore_manager", "admin"]))  # ✅ Changed to lowercase
 ):
     """Get pending provision requests"""
     
@@ -82,27 +82,15 @@ async def get_pending_requests(
     return {
         "success": True,
         "count": len(requests),
-        "requests": [
-            {
-                "id": str(req.id),
-                "request_type": req.request_type,
-                "description": req.description,
-                "amount": float(req.amount),
-                "vendor": req.vendor,
-                "requested_by": str(req.requested_by),
-                "status": req.status,
-                "created_at": req.created_at.isoformat()
-            }
-            for req in requests
-        ]
+        "requests": [...]
     }
 
-@router.post("/review/{request_id}")
-async def review_provision_request(
+@router.post("/approve/{request_id}")
+async def approve_provision_request(
     request_id: str,
-    approved: bool = Form(...),
+    vendor_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
-    current_user: PersonRecord = Depends(require_role(["flavorcore_manager"]))
+    current_user: PersonRecord = Depends(require_role(["admin"]))  # ✅ Changed to lowercase
 ):
     """FlavorCore Manager reviews HarvestFlow provision request"""
     

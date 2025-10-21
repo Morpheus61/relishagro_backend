@@ -13,7 +13,7 @@ from datetime import datetime
 
 # Import database and routes
 from database import init_db, test_connection
-from routes import auth, admin, workers, job_types, provisions, onboarding, attendance, face_recognition, gps_tracking, supervisor
+from routes import auth, admin, workers, job_types, provisions, onboarding, attendance, face_recognition, gps_tracking, supervisor, yields
 
 # Configure logging
 logging.basicConfig(
@@ -127,6 +127,7 @@ app.include_router(attendance.router, prefix="/api", tags=["Attendance"])
 app.include_router(face_recognition.router, prefix="/api", tags=["Face Recognition"])
 app.include_router(gps_tracking.router, prefix="/api", tags=["GPS Tracking"])
 app.include_router(supervisor.router, prefix="/api", tags=["Supervisor"])
+app.include_router(yields.router, prefix="/api", tags=["Yields"])
 
 if __name__ == "__main__":
     uvicorn.run(

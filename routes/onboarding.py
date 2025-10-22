@@ -71,7 +71,7 @@ async def create_onboarding_request(
         if aadhaar_document:
             aadhaar_data = await aadhaar_document.read()
         
-        # For suppliers/vendors, create onboarding_pending record
+        # For suppliers/vendors, create onboarding_requests record
         if entity_type in ['supplier', 'vendor']:
             result = await create_supplier_vendor_onboarding(
                 conn, first_name, last_name, mobile, address, role, aadhaar,
@@ -165,7 +165,7 @@ async def create_supplier_vendor_onboarding(conn, first_name, last_name, mobile,
     }
     
     query = """
-    INSERT INTO onboarding_pending (
+    INSERT INTO onboarding_requests (
         entity_type, data, submitted_by, status, submitted_at, approval_checklist
     ) VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING id, submitted_at
@@ -227,12 +227,12 @@ async def get_pending_onboarding(
         
         where_clause = f"WHERE {' AND '.join(where_conditions)}" if where_conditions else ""
         
-        # Get onboarding_pending records
+        # Get onboarding_requests records
         pending_query = f"""
         SELECT 
             id, entity_type, data, status, submitted_at, reviewed_at,
             submitted_by, reviewed_by, remarks, approval_checklist
-        FROM onboarding_pending
+        FROM onboarding_requests
         {where_clause}
         ORDER BY submitted_at DESC
         """
@@ -407,7 +407,7 @@ async def approve_entity_onboarding(conn, request_id, current_user):
     # Get the onboarding pending record
     pending_query = """
     SELECT entity_type, data, approval_checklist
-    FROM onboarding_pending 
+    FROM onboarding_requests
     WHERE id = $1 AND status = 'pending'
     """
     
@@ -449,7 +449,7 @@ async def approve_entity_onboarding(conn, request_id, current_user):
     
     # Update onboarding pending status
     update_query = """
-    UPDATE onboarding_pending 
+    UPDATE onboarding_requests 
     SET status = 'approved', reviewed_by = $1, reviewed_at = $2
     WHERE id = $3
     """
@@ -517,13 +517,12 @@ async def reject_onboarding_request(
             table = "onboarding_requests"
         else:
             query = """
-            UPDATE onboarding_pending 
+            UPDATE onboarding_requests
             SET status = 'rejected', reviewed_by = $1, reviewed_at = $2, remarks = $3
             WHERE id = $4 AND status = 'pending'
             """
-            table = "onboarding_pending"
-        
-        now = datetime.now()
+            table = "onboarding_requests"
+            now = datetime.now()
         result = await conn.execute(
             query, 
             uuid.UUID(current_user.id), 

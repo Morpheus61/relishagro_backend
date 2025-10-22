@@ -13,7 +13,7 @@ from datetime import datetime
 
 # Import database and routes
 from database import init_db, test_connection
-from routes import auth, admin, workers, job_types, provisions, onboarding, attendance, face_recognition, gps_tracking, supervisor, yields
+from routes import auth, admin, workers, daily_job_types, provisions, onboarding, attendance, face_recognition, gps_tracking, supervisor, yields
 
 # Configure logging
 logging.basicConfig(
@@ -120,7 +120,7 @@ async def root():
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(admin.router, prefix="/api", tags=["Admin"])
 app.include_router(workers.router, prefix="/api/workers", tags=["Workers"])
-app.include_router(job_types.router, prefix="/api", tags=["Job Types"])
+app.include_router(daily_job_types.router, prefix="/api", tags=["Job Types"])
 app.include_router(provisions.router, prefix="/api/provisions", tags=["Provisions"])
 app.include_router(onboarding.router, prefix="/api/onboarding", tags=["Onboarding"])
 app.include_router(attendance.router, prefix="/api", tags=["Attendance"])

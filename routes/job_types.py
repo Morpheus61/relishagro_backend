@@ -1,4 +1,4 @@
-# routes/job_types.py
+# routes/daily_job_types.py
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date
@@ -84,7 +84,7 @@ async def get_jobs(current_user: UserProfile = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=f"Error fetching jobs: {str(e)}")
 
 @router.get("/job-types")
-async def get_job_types():
+async def get_daily_job_types():
     """Get all job types from daily_job_types table"""
     try:
         conn = await get_db_connection()
@@ -106,9 +106,9 @@ async def get_job_types():
         rows = await conn.fetch(query)
         await conn.close()
         
-        job_types = []
+        daily_job_types = []
         for row in rows:
-            job_types.append({
+            daily_job_types.append({
                 "id": str(row['id']),
                 "job_name": row['job_name'],
                 "category": row['category'],
@@ -121,8 +121,8 @@ async def get_job_types():
         
         return {
             "success": True,
-            "data": job_types,
-            "message": f"Retrieved {len(job_types)} job types successfully"
+            "data": daily_job_types,
+            "message": f"Retrieved {len(daily_job_types)} job types successfully"
         }
         
     except Exception as e:

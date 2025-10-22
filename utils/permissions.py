@@ -24,7 +24,7 @@ ROLE_DISPLAY_NAMES = {
 ROLE_PERMISSIONS = {
     "admin": [
         "manage_users", "manage_config", "approve_all", "view_all",
-        "manage_job_types", "manage_timings", "manage_rfid"
+        "manage_daily_job_types", "manage_timings", "manage_rfid"
     ],
     "harvestflow_manager": [
         "onboard_workers", "record_attendance", "assign_jobs",

@@ -1,4 +1,4 @@
-# routes/daily_job_types.py
+# routes/job_types.py
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date
@@ -58,6 +58,7 @@ async def get_jobs(current_user: UserProfile = Depends(get_current_user)):
             updated_at
         FROM daily_job_types
         ORDER BY job_name
+        LIMIT 100
         """
         
         rows = await conn.fetch(query)
@@ -101,6 +102,7 @@ async def get_daily_job_types():
             updated_at
         FROM daily_job_types
         ORDER BY created_at DESC
+        LIMIT 100
         """
         
         rows = await conn.fetch(query)
@@ -122,7 +124,7 @@ async def get_daily_job_types():
         return {
             "success": True,
             "data": daily_job_types,
-            "message": f"Retrieved {len(daily_job_types)} job types successfully"
+            "message": f"Retrieved {len(daily_job_types)} job types successfully"  # ✅ FIXED
         }
         
     except Exception as e:

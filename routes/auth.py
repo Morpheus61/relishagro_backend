@@ -1,5 +1,5 @@
 # routes/auth.py
-import os  # ← ADD THIS LINE AT THE TOP
+import os
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Dict, Any
@@ -29,15 +29,6 @@ JWT_ALGORITHM = os.getenv("ALGORITHM", "HS256")
 class LoginRequest(BaseModel):
     staff_id: str
 
-class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    staff_id: str
-    role: str
-    first_name: str
-    last_name: str
-    expires_in: int = 86400  # 24 hours
-
 class UserProfile(BaseModel):
     id: str
     email: str
@@ -47,17 +38,20 @@ class UserProfile(BaseModel):
 
 @router.post("/login")
 async def login(login_data: LoginRequest):
-    """Login with staff ID - Returns proper JWT token"""
+    """Login with staff ID - Returns proper JWT token in frontend-compatible format"""
     try:
         conn = await get_db_connection()
         
         # Find user by staff_id in person_records
         query = """
         SELECT 
+            id,
             staff_id,
             first_name,
             last_name, 
-            person_type as role
+            person_type as role,
+            designation,
+            contact_number
         FROM person_records 
         WHERE staff_id = $1 AND status = 'active'
         """
@@ -73,7 +67,7 @@ async def login(login_data: LoginRequest):
         
         # Create JWT token with user data
         token_data = {
-            "sub": user['staff_id'],
+            "sub": str(user['id']),
             "staff_id": user['staff_id'],
             "role": user['role'],
             "first_name": user['first_name'] or "",
@@ -83,14 +77,29 @@ async def login(login_data: LoginRequest):
         
         token = jwt.encode(token_data, JWT_SECRET, algorithm=JWT_ALGORITHM)
         
-        return LoginResponse(
-            access_token=token,
-            staff_id=user['staff_id'],
-            role=user['role'],
-            first_name=user['first_name'] or "",
-            last_name=user['last_name'] or ""
-        )
+        # ✅ RETURN IN FRONTEND-COMPATIBLE FORMAT
+        return {
+            "success": True,
+            "data": {
+                "token": token,
+                "user": {
+                    "id": str(user['id']),
+                    "staff_id": user['staff_id'],
+                    "role": user['role'],
+                    "first_name": user['first_name'] or "",
+                    "last_name": user['last_name'] or "",
+                    "full_name": f"{user['first_name'] or ''} {user['last_name'] or ''}".strip() or user['staff_id'],
+                    "designation": user['designation'] or "Staff Member",
+                    "department": "General",
+                    "username": user['staff_id'],
+                    "email": user['contact_number'] or f"{user['staff_id']}@relishagro.com"
+                }
+            },
+            "message": "Login successful"
+        }
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -112,6 +121,7 @@ async def get_current_user(
         role = payload.get("role")
         first_name = payload.get("first_name", "")
         last_name = payload.get("last_name", "")
+        user_id = payload.get("sub")
         
         if not staff_id:
             raise HTTPException(
@@ -120,7 +130,7 @@ async def get_current_user(
             )
         
         return UserProfile(
-            id=staff_id,
+            id=user_id or staff_id,
             email=f"{staff_id}@relishagro.com",
             role=role,
             staff_id=staff_id,

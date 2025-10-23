@@ -119,7 +119,6 @@ def get_daily_job_types(db: Session = Depends(get_db)):
                 "updated_at": jt.updated_at.isoformat() if jt.updated_at else None
             })
         
-        # ✅ Return array directly for frontend compatibility
         return daily_job_types
         
     except Exception as e:
@@ -136,7 +135,6 @@ def create_job_type(
 ):
     """Create a new job type - Allows Admin, Managers, and Supervisors"""
     try:
-        # Check if job name already exists
         existing = db.query(DailyJobType).filter(
             DailyJobType.job_name == job_type.job_name
         ).first()
@@ -153,7 +151,7 @@ def create_job_type(
             category=job_type.category,
             unit_of_measurement=job_type.unit_of_measurement,
             expected_output_per_worker=job_type.expected_output_per_worker,
-            created_by=uuid.UUID(current_user.id),
+            created_by=None,
             created_at=datetime.now(),
             updated_at=datetime.now()
         )
@@ -170,7 +168,7 @@ def create_job_type(
                 "category": new_job_type.category,
                 "unit_of_measurement": new_job_type.unit_of_measurement,
                 "expected_output_per_worker": float(new_job_type.expected_output_per_worker),
-                "created_by": str(new_job_type.created_by),
+                "created_by": None,
                 "created_at": new_job_type.created_at.isoformat(),
                 "updated_at": new_job_type.updated_at.isoformat()
             },
@@ -240,7 +238,6 @@ def update_job_type(
         if not job_type:
             raise HTTPException(status_code=404, detail="Job type not found")
         
-        # Update fields if provided
         if job_type_update.job_name is not None:
             job_type.job_name = job_type_update.job_name
         if job_type_update.category is not None:
@@ -324,7 +321,6 @@ def get_production_report(
     from sqlalchemy import text
     
     try:
-        # Production data from lots and processing
         production_query = text("""
         SELECT 
             l.crop,
@@ -343,7 +339,6 @@ def get_production_report(
         
         production_result = db.execute(production_query, {"start": start_date, "end": end_date}).fetchall()
         
-        # Worker productivity from job_completion_summary if available
         productivity_data = None
         try:
             productivity_query = text("""
@@ -362,7 +357,6 @@ def get_production_report(
         except Exception:
             pass
         
-        # Harvest metrics if available
         harvest_data = []
         try:
             harvest_query = text("""

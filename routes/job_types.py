@@ -69,7 +69,6 @@ def get_jobs(
     try:
         job_types = (
             db.query(DailyJobType)
-            .filter(DailyJobType.is_active == True)
             .order_by(DailyJobType.job_name)
             .limit(100)
             .all()
@@ -102,7 +101,6 @@ def get_daily_job_types(db: Session = Depends(get_db)):
     try:
         job_types = (
             db.query(DailyJobType)
-            .filter(DailyJobType.is_active == True)
             .order_by(DailyJobType.created_at.desc())
             .limit(100)
             .all()
@@ -140,8 +138,7 @@ def create_job_type(
     try:
         # Check if job name already exists
         existing = db.query(DailyJobType).filter(
-            DailyJobType.job_name == job_type.job_name,
-            DailyJobType.is_active == True
+            DailyJobType.job_name == job_type.job_name
         ).first()
         
         if existing:
@@ -158,8 +155,7 @@ def create_job_type(
             expected_output_per_worker=job_type.expected_output_per_worker,
             created_by=uuid.UUID(current_user.id),
             created_at=datetime.now(),
-            updated_at=datetime.now(),
-            is_active=True
+            updated_at=datetime.now()
         )
         
         db.add(new_job_type)
@@ -199,8 +195,7 @@ def get_job_type(
     """Get a specific job type by ID"""
     try:
         job_type = db.query(DailyJobType).filter(
-            DailyJobType.id == uuid.UUID(job_type_id),
-            DailyJobType.is_active == True
+            DailyJobType.id == uuid.UUID(job_type_id)
         ).first()
         
         if not job_type:
@@ -239,8 +234,7 @@ def update_job_type(
     """Update an existing job type"""
     try:
         job_type = db.query(DailyJobType).filter(
-            DailyJobType.id == uuid.UUID(job_type_id),
-            DailyJobType.is_active == True
+            DailyJobType.id == uuid.UUID(job_type_id)
         ).first()
         
         if not job_type:
@@ -289,19 +283,16 @@ def delete_job_type(
     db: Session = Depends(get_db),
     current_user: UserProfile = Depends(require_admin_or_manager)
 ):
-    """Soft delete a job type (set is_active to False)"""
+    """Delete a job type permanently"""
     try:
         job_type = db.query(DailyJobType).filter(
-            DailyJobType.id == uuid.UUID(job_type_id),
-            DailyJobType.is_active == True
+            DailyJobType.id == uuid.UUID(job_type_id)
         ).first()
         
         if not job_type:
             raise HTTPException(status_code=404, detail="Job type not found")
         
-        job_type.is_active = False
-        job_type.updated_at = datetime.now()
-        
+        db.delete(job_type)
         db.commit()
         
         return {

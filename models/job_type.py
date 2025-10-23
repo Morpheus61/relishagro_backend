@@ -1,5 +1,5 @@
 # models/job_type.py
-from sqlalchemy import Column, String, DateTime, Numeric, ForeignKey
+from sqlalchemy import Column, String, DateTime, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
@@ -15,7 +15,7 @@ class DailyJobType(Base):
     category = Column(String, nullable=True)
     unit_of_measurement = Column(String, nullable=True)
     expected_output_per_worker = Column(Numeric, nullable=True)
-    created_by = Column(UUID(as_uuid=True), ForeignKey('auth.users.id'), nullable=True)
+    created_by = Column(UUID(as_uuid=True), nullable=True)  # ✅ REMOVED ForeignKey
     created_at = Column(DateTime(timezone=True), default=datetime.now)
     updated_at = Column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now)
     

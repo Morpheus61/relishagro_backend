@@ -71,7 +71,7 @@ async def create_onboarding_request(
         if aadhaar_document:
             aadhaar_data = await aadhaar_document.read()
         
-        # For suppliers/vendors, create onboarding_requests record
+        # For suppliers/vendors, create onboarding_pending record
         if entity_type in ['supplier', 'vendor']:
             result = await create_supplier_vendor_onboarding(
                 conn, first_name, last_name, mobile, address, role, aadhaar,
@@ -147,7 +147,7 @@ async def create_staff_onboarding(conn, first_name, last_name, mobile, address, 
     }
 
 async def create_supplier_vendor_onboarding(conn, first_name, last_name, mobile, address, role, aadhaar, face_image_data, aadhaar_data, entity_type, current_user):
-    """Create supplier/vendor onboarding request"""
+    """Create supplier/vendor onboarding request in onboarding_pending table"""
     onboarding_data = {
         "personal_info": {
             "first_name": first_name,
@@ -165,7 +165,7 @@ async def create_supplier_vendor_onboarding(conn, first_name, last_name, mobile,
     }
     
     query = """
-    INSERT INTO onboarding_requests (
+    INSERT INTO onboarding_pending (
         entity_type, data, submitted_by, status, submitted_at, approval_checklist
     ) VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING id, submitted_at
@@ -207,70 +207,37 @@ async def get_pending_onboarding(
     status: Optional[str] = Query(None),
     current_user = Depends(require_manager_or_admin)  # ✅ FIXED: Now allows Admins
 ):
-    """Get all pending onboarding requests"""
+    """Get all pending onboarding requests from both tables"""
     try:
         conn = await get_db_connection()
+        all_requests = []
         
-        where_conditions = []
-        params = []
-        param_count = 1
-        
-        if entity_type:
-            where_conditions.append(f"entity_type = ${param_count}")
-            params.append(entity_type)
-            param_count += 1
+        # --- Fetch from onboarding_requests (staff) ---
+        staff_where_conditions = []
+        staff_params = []
+        staff_param_count = 1
         
         if status:
-            where_conditions.append(f"status = ${param_count}")
-            params.append(status)
-            param_count += 1
-        
-        where_clause = f"WHERE {' AND '.join(where_conditions)}" if where_conditions else ""
-        
-        # Get onboarding_requests records
-        pending_query = f"""
-        SELECT 
-            id, entity_type, data, status, submitted_at, reviewed_at,
-            submitted_by, reviewed_by, remarks, approval_checklist
-        FROM onboarding_requests
-        {where_clause}
-        ORDER BY submitted_at DESC
-        """
-        
-        pending_rows = await conn.fetch(pending_query, *params)
-        
-        # Get onboarding_requests records
-        requests_query = """
+            staff_where_conditions.append(f"status = ${staff_param_count}")
+            staff_params.append(status)
+            staff_param_count += 1
+        else:
+            staff_where_conditions.append(f"status = ${staff_param_count}")
+            staff_params.append('pending')
+            staff_param_count += 1
+            
+        staff_where_clause = f"WHERE {' AND '.join(staff_where_conditions)}" if staff_where_conditions else ""
+        staff_query = f"""
         SELECT 
             id, first_name, last_name, mobile, role, status,
             submitted_by, approved_by, created_at
         FROM onboarding_requests
-        WHERE status = 'pending'
+        {staff_where_clause}
         ORDER BY created_at DESC
         """
+        staff_rows = await conn.fetch(staff_query, *staff_params)
         
-        request_rows = await conn.fetch(requests_query)
-        
-        await conn.close()
-        
-        # Combine results
-        all_requests = []
-        
-        for row in pending_rows:
-            data = json.loads(row['data']) if row['data'] else {}
-            all_requests.append({
-                "id": str(row['id']),
-                "type": "entity",
-                "entity_type": row['entity_type'],
-                "name": f"{data.get('personal_info', {}).get('first_name', '')} {data.get('personal_info', {}).get('last_name', '')}".strip(),
-                "role": data.get('role'),
-                "status": row['status'],
-                "submitted_at": row['submitted_at'].isoformat() if row['submitted_at'] else None,
-                "reviewed_at": row['reviewed_at'].isoformat() if row['reviewed_at'] else None,
-                "approval_checklist": json.loads(row['approval_checklist']) if row['approval_checklist'] else {}
-            })
-        
-        for row in request_rows:
+        for row in staff_rows:
             all_requests.append({
                 "id": str(row['id']),
                 "type": "staff",
@@ -282,6 +249,53 @@ async def get_pending_onboarding(
                 "mobile": row['mobile']
             })
         
+        # --- Fetch from onboarding_pending (suppliers/vendors) ---
+        pending_where_conditions = []
+        pending_params = []
+        pending_param_count = 1
+        
+        if entity_type and entity_type != 'staff':
+            pending_where_conditions.append(f"entity_type = ${pending_param_count}")
+            pending_params.append(entity_type)
+            pending_param_count += 1
+        
+        if status:
+            pending_where_conditions.append(f"status = ${pending_param_count}")
+            pending_params.append(status)
+            pending_param_count += 1
+        else:
+            pending_where_conditions.append(f"status = ${pending_param_count}")
+            pending_params.append('pending')
+            pending_param_count += 1
+            
+        pending_where_clause = f"WHERE {' AND '.join(pending_where_conditions)}" if pending_where_conditions else ""
+        pending_query = f"""
+        SELECT 
+            id, entity_type, data, status, submitted_at, reviewed_at,
+            submitted_by, reviewed_by, remarks, approval_checklist, created_at
+        FROM onboarding_pending
+        {pending_where_clause}
+        ORDER BY submitted_at DESC
+        """
+        pending_rows = await conn.fetch(pending_query, *pending_params)
+        
+        for row in pending_rows:
+            data = json.loads(row['data']) if row['data'] else {}
+            personal_info = data.get('personal_info', {})
+            all_requests.append({
+                "id": str(row['id']),
+                "type": "entity",
+                "entity_type": row['entity_type'],
+                "name": f"{personal_info.get('first_name', '')} {personal_info.get('last_name', '')}".strip(),
+                "role": data.get('role'),
+                "status": row['status'],
+                "submitted_at": row['submitted_at'].isoformat() if row['submitted_at'] else None,
+                "reviewed_at": row['reviewed_at'].isoformat() if row['reviewed_at'] else None,
+                "approval_checklist": json.loads(row['approval_checklist']) if row['approval_checklist'] else {}
+            })
+        
+        await conn.close()
+        
         return {
             "success": True,
             "data": all_requests,
@@ -289,6 +303,7 @@ async def get_pending_onboarding(
         }
         
     except Exception as e:
+        await conn.close()  # Ensure connection is closed on error
         raise HTTPException(status_code=500, detail=f"Error retrieving pending onboarding: {str(e)}")
 
 @router.post("/{request_id}/approve")
@@ -329,6 +344,7 @@ async def approve_onboarding_request(
     except HTTPException:
         raise
     except Exception as e:
+        await conn.close()
         raise HTTPException(status_code=500, detail=f"Error approving onboarding request: {str(e)}")
 
 async def get_person_name(conn, person_id: str) -> str:
@@ -376,7 +392,6 @@ async def approve_staff_onboarding(conn, request_id, current_user):
         request_data['role'],
         'active',
         staff_id,
-        now.date(),
         uuid.UUID(current_user.id),
         now,
         now
@@ -407,7 +422,7 @@ async def approve_entity_onboarding(conn, request_id, current_user):
     # Get the onboarding pending record
     pending_query = """
     SELECT entity_type, data, approval_checklist
-    FROM onboarding_requests
+    FROM onboarding_pending
     WHERE id = $1 AND status = 'pending'
     """
     
@@ -449,7 +464,7 @@ async def approve_entity_onboarding(conn, request_id, current_user):
     
     # Update onboarding pending status
     update_query = """
-    UPDATE onboarding_requests 
+    UPDATE onboarding_pending 
     SET status = 'approved', reviewed_by = $1, reviewed_at = $2
     WHERE id = $3
     """
@@ -507,6 +522,7 @@ async def reject_onboarding_request(
     """Reject an onboarding request"""
     try:
         conn = await get_db_connection()
+        now = datetime.now()
         
         if entity_type == "staff":
             query = """
@@ -514,22 +530,25 @@ async def reject_onboarding_request(
             SET status = 'rejected', approved_by = $1, updated_at = $2
             WHERE id = $3 AND status = 'pending'
             """
-            table = "onboarding_requests"
+            result = await conn.execute(
+                query, 
+                uuid.UUID(current_user.id), 
+                now, 
+                uuid.UUID(request_id)
+            )
         else:
             query = """
-            UPDATE onboarding_requests
+            UPDATE onboarding_pending
             SET status = 'rejected', reviewed_by = $1, reviewed_at = $2, remarks = $3
             WHERE id = $4 AND status = 'pending'
             """
-            table = "onboarding_requests"
-            now = datetime.now()
-        result = await conn.execute(
-            query, 
-            uuid.UUID(current_user.id), 
-            now, 
-            reason if entity_type != "staff" else None,
-            uuid.UUID(request_id)
-        )
+            result = await conn.execute(
+                query, 
+                uuid.UUID(current_user.id), 
+                now, 
+                reason,
+                uuid.UUID(request_id)
+            )
         
         await conn.close()
         
@@ -550,8 +569,11 @@ async def reject_onboarding_request(
         }
         
     except ValueError:
+        await conn.close()
         raise HTTPException(status_code=400, detail="Invalid request ID format")
     except HTTPException:
+        await conn.close()
         raise
     except Exception as e:
+        await conn.close()
         raise HTTPException(status_code=500, detail=f"Error rejecting onboarding request: {str(e)}")

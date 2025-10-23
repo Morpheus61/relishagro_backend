@@ -1,5 +1,5 @@
 # routes/job_types.py
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date
 from sqlalchemy.orm import Session
@@ -8,11 +8,30 @@ import uuid
 
 from database import get_db
 from models.job_type import DailyJobType
-from routes.auth import get_current_user, require_manager, UserProfile
+from routes.auth import get_current_user, require_admin, UserProfile
 
 router = APIRouter()
 
-# Pydantic models for request validation
+# ============================================================================
+# CUSTOM AUTHORIZATION DEPENDENCY
+# ============================================================================
+
+async def require_admin_or_manager(current_user: UserProfile = Depends(get_current_user)):
+    """Allow both admins and managers to access job type endpoints"""
+    allowed_roles = ["admin", "harvestflow_manager", "flavorcore_manager", "supervisor"]
+    user_role = current_user.role.lower() if hasattr(current_user, 'role') else ''
+    
+    if user_role not in allowed_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Only Admins, Managers, or Supervisors can manage job types."
+        )
+    return current_user
+
+# ============================================================================
+# PYDANTIC MODELS
+# ============================================================================
+
 class JobTypeCreate(BaseModel):
     job_name: str
     category: str
@@ -41,9 +60,11 @@ class DailyJobUpdate(BaseModel):
 # JOB TYPES ROUTES (daily_job_types table)
 # ============================================================================
 
-# ✅ NEW ENDPOINT - Added for frontend compatibility
 @router.get("/jobs")
-def get_jobs(db: Session = Depends(get_db), current_user: UserProfile = Depends(get_current_user)):
+def get_jobs(
+    db: Session = Depends(get_db), 
+    current_user: UserProfile = Depends(get_current_user)
+):
     """Get all daily jobs (alias for job-types for frontend compatibility)"""
     try:
         job_types = (
@@ -72,11 +93,12 @@ def get_jobs(db: Session = Depends(get_db), current_user: UserProfile = Depends(
         }
         
     except Exception as e:
+        print(f"❌ ERROR in get_jobs: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching jobs: {str(e)}")
 
 @router.get("/job-types")
 def get_daily_job_types(db: Session = Depends(get_db)):
-    """Get all job types from daily_job_types table"""
+    """Get all job types from daily_job_types table - Public endpoint"""
     try:
         job_types = (
             db.query(DailyJobType)
@@ -99,25 +121,29 @@ def get_daily_job_types(db: Session = Depends(get_db)):
                 "updated_at": jt.updated_at.isoformat() if jt.updated_at else None
             })
         
-        return {
-            "success": True,
-            "data": daily_job_types,
-            "message": f"Retrieved {len(daily_job_types)} job types successfully"
-        }
+        # ✅ Return array directly for frontend compatibility
+        return daily_job_types
         
     except Exception as e:
+        print(f"❌ ERROR in get_daily_job_types: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error retrieving job types: {str(e)}")
 
 @router.post("/job-types")
 def create_job_type(
     job_type: JobTypeCreate, 
     db: Session = Depends(get_db),
-    current_user: UserProfile = Depends(require_manager)
+    current_user: UserProfile = Depends(require_admin_or_manager)
 ):
-    """Create a new job type with authenticated user"""
+    """Create a new job type - Allows Admin, Managers, and Supervisors"""
     try:
         # Check if job name already exists
-        existing = db.query(DailyJobType).filter(DailyJobType.job_name == job_type.job_name).first()
+        existing = db.query(DailyJobType).filter(
+            DailyJobType.job_name == job_type.job_name,
+            DailyJobType.is_active == True
+        ).first()
+        
         if existing:
             raise HTTPException(
                 status_code=400, 
@@ -125,6 +151,7 @@ def create_job_type(
             )
         
         new_job_type = DailyJobType(
+            id=uuid.uuid4(),
             job_name=job_type.job_name,
             category=job_type.category,
             unit_of_measurement=job_type.unit_of_measurement,
@@ -146,7 +173,7 @@ def create_job_type(
                 "job_name": new_job_type.job_name,
                 "category": new_job_type.category,
                 "unit_of_measurement": new_job_type.unit_of_measurement,
-                "expected_output_per_worker": new_job_type.expected_output_per_worker,
+                "expected_output_per_worker": float(new_job_type.expected_output_per_worker),
                 "created_by": str(new_job_type.created_by),
                 "created_at": new_job_type.created_at.isoformat(),
                 "updated_at": new_job_type.updated_at.isoformat()
@@ -158,11 +185,141 @@ def create_job_type(
         raise
     except Exception as e:
         db.rollback()
+        print(f"❌ ERROR creating job type: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error creating job type: {str(e)}")
 
+@router.get("/job-types/{job_type_id}")
+def get_job_type(
+    job_type_id: str,
+    db: Session = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user)
+):
+    """Get a specific job type by ID"""
+    try:
+        job_type = db.query(DailyJobType).filter(
+            DailyJobType.id == uuid.UUID(job_type_id),
+            DailyJobType.is_active == True
+        ).first()
+        
+        if not job_type:
+            raise HTTPException(status_code=404, detail="Job type not found")
+        
+        return {
+            "success": True,
+            "data": {
+                "id": str(job_type.id),
+                "job_name": job_type.job_name,
+                "category": job_type.category,
+                "unit_of_measurement": job_type.unit_of_measurement,
+                "expected_output_per_worker": float(job_type.expected_output_per_worker) if job_type.expected_output_per_worker else 0,
+                "created_by": str(job_type.created_by) if job_type.created_by else None,
+                "created_at": job_type.created_at.isoformat() if job_type.created_at else None,
+                "updated_at": job_type.updated_at.isoformat() if job_type.updated_at else None
+            },
+            "message": "Job type retrieved successfully"
+        }
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job type ID format")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ ERROR getting job type: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving job type: {str(e)}")
+
+@router.put("/job-types/{job_type_id}")
+def update_job_type(
+    job_type_id: str,
+    job_type_update: JobTypeUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserProfile = Depends(require_admin_or_manager)
+):
+    """Update an existing job type"""
+    try:
+        job_type = db.query(DailyJobType).filter(
+            DailyJobType.id == uuid.UUID(job_type_id),
+            DailyJobType.is_active == True
+        ).first()
+        
+        if not job_type:
+            raise HTTPException(status_code=404, detail="Job type not found")
+        
+        # Update fields if provided
+        if job_type_update.job_name is not None:
+            job_type.job_name = job_type_update.job_name
+        if job_type_update.category is not None:
+            job_type.category = job_type_update.category
+        if job_type_update.unit_of_measurement is not None:
+            job_type.unit_of_measurement = job_type_update.unit_of_measurement
+        if job_type_update.expected_output_per_worker is not None:
+            job_type.expected_output_per_worker = job_type_update.expected_output_per_worker
+        
+        job_type.updated_at = datetime.now()
+        
+        db.commit()
+        db.refresh(job_type)
+        
+        return {
+            "success": True,
+            "data": {
+                "id": str(job_type.id),
+                "job_name": job_type.job_name,
+                "category": job_type.category,
+                "unit_of_measurement": job_type.unit_of_measurement,
+                "expected_output_per_worker": float(job_type.expected_output_per_worker),
+                "updated_at": job_type.updated_at.isoformat()
+            },
+            "message": "Job type updated successfully"
+        }
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job type ID format")
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"❌ ERROR updating job type: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating job type: {str(e)}")
+
+@router.delete("/job-types/{job_type_id}")
+def delete_job_type(
+    job_type_id: str,
+    db: Session = Depends(get_db),
+    current_user: UserProfile = Depends(require_admin_or_manager)
+):
+    """Soft delete a job type (set is_active to False)"""
+    try:
+        job_type = db.query(DailyJobType).filter(
+            DailyJobType.id == uuid.UUID(job_type_id),
+            DailyJobType.is_active == True
+        ).first()
+        
+        if not job_type:
+            raise HTTPException(status_code=404, detail="Job type not found")
+        
+        job_type.is_active = False
+        job_type.updated_at = datetime.now()
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "Job type deleted successfully"
+        }
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job type ID format")
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"❌ ERROR deleting job type: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting job type: {str(e)}")
 
 # ============================================================================
-# ENHANCED REPORTING ROUTES (Now using SQLAlchemy ORM for compatibility)
+# ENHANCED REPORTING ROUTES
 # ============================================================================
 
 @router.get("/reports/production")
@@ -170,14 +327,13 @@ def get_production_report(
     start_date: date,
     end_date: date,
     db: Session = Depends(get_db),
-    current_user: UserProfile = Depends(require_manager)
+    current_user: UserProfile = Depends(require_admin_or_manager)
 ):
     """Get production report with data from multiple tables"""
-    from sqlalchemy import text, func, and_
+    from sqlalchemy import text
     
     try:
         # Production data from lots and processing
-        # Since you're using raw SQL, we'll use SQLAlchemy's text() for safety
         production_query = text("""
         SELECT 
             l.crop,
@@ -213,7 +369,6 @@ def get_production_report(
                     "completed_jobs": row.completed_jobs or 0
                 }
         except Exception:
-            # Table may not exist — that's OK
             pass
         
         # Harvest metrics if available
@@ -236,7 +391,6 @@ def get_production_report(
                     "avg_quality": float(row.avg_quality) if row.avg_quality else 0
                 })
         except Exception:
-            # Table may not exist — that's OK
             pass
         
         report = {
@@ -267,4 +421,5 @@ def get_production_report(
         }
         
     except Exception as e:
+        print(f"❌ ERROR generating production report: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating production report: {str(e)}")

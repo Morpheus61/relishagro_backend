@@ -11,6 +11,7 @@ import asyncpg
 import jwt
 from datetime import datetime, timedelta
 from jwt.exceptions import InvalidTokenError
+import asyncio
 
 router = APIRouter()
 security = HTTPBearer()
@@ -40,9 +41,20 @@ class UserProfile(BaseModel):
 async def login(login_data: LoginRequest):
     """Login with staff ID - Returns proper JWT token in frontend-compatible format"""
     try:
-        conn = await get_db_connection()
+        print(f"🔐 [AUTH] Login attempt for staff_id: {login_data.staff_id}")
         
-        # Find user by staff_id in person_records
+        # ✅ ADD TIMEOUT TO DATABASE CONNECTION (5 seconds)
+        try:
+            conn = await asyncio.wait_for(get_db_connection(), timeout=5.0)
+            print(f"✅ [AUTH] Database connection established")
+        except asyncio.TimeoutError:
+            print(f"❌ [AUTH] Database connection timeout after 5 seconds")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database connection timeout. Please try again."
+            )
+        
+        # Find user by staff_id in person_records with timeout
         query = """
         SELECT 
             id,
@@ -56,14 +68,32 @@ async def login(login_data: LoginRequest):
         WHERE staff_id = $1 AND status = 'active'
         """
         
-        user = await conn.fetchrow(query, login_data.staff_id)
-        await conn.close()
+        try:
+            # ✅ ADD TIMEOUT TO QUERY (3 seconds)
+            user = await asyncio.wait_for(
+                conn.fetchrow(query, login_data.staff_id),
+                timeout=3.0
+            )
+            print(f"✅ [AUTH] Query completed for staff_id: {login_data.staff_id}")
+        except asyncio.TimeoutError:
+            print(f"❌ [AUTH] Query timeout after 3 seconds")
+            await conn.close()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database query timeout. Please try again."
+            )
+        finally:
+            await conn.close()
+            print(f"✅ [AUTH] Database connection closed")
         
         if not user:
+            print(f"❌ [AUTH] User not found or inactive: {login_data.staff_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid staff ID or user not active"
             )
+        
+        print(f"✅ [AUTH] User found: {user['staff_id']} ({user['role']})")
         
         # Create JWT token with user data
         token_data = {
@@ -77,8 +107,10 @@ async def login(login_data: LoginRequest):
         
         token = jwt.encode(token_data, JWT_SECRET, algorithm=JWT_ALGORITHM)
         
+        print(f"✅ [AUTH] JWT token generated for {user['staff_id']}")
+        
         # ✅ RETURN IN FRONTEND-COMPATIBLE FORMAT
-        return {
+        response = {
             "success": True,
             "data": {
                 "token": token,
@@ -98,9 +130,15 @@ async def login(login_data: LoginRequest):
             "message": "Login successful"
         }
         
+        print(f"✅ [AUTH] Login successful for {user['staff_id']}")
+        return response
+        
     except HTTPException:
         raise
     except Exception as e:
+        print(f"❌ [AUTH] Unexpected error during login: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Login failed: {str(e)}"
@@ -156,7 +194,7 @@ async def get_current_user(
 async def get_user_profile(user_id: str) -> Dict[str, Any]:
     """Get user profile from person_records table"""
     try:
-        conn = await get_db_connection()
+        conn = await asyncio.wait_for(get_db_connection(), timeout=5.0)
         query = """
         SELECT 
             pr.person_type as role,
@@ -165,7 +203,10 @@ async def get_user_profile(user_id: str) -> Dict[str, Any]:
         FROM person_records pr
         WHERE pr.system_account_id = $1
         """
-        profile = await conn.fetchrow(query, uuid.UUID(user_id))
+        profile = await asyncio.wait_for(
+            conn.fetchrow(query, uuid.UUID(user_id)),
+            timeout=3.0
+        )
         await conn.close()
         
         if profile:

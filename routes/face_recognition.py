@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from database import get_db
 from models import PersonRecord
-from services import FaceRecognitionService
+from services.face_service import FaceRecognitionService
 from utils import require_role
 import cv2
 import numpy as np

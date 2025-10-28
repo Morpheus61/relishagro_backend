@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Database URL from environment variables
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres.engzyfgdgqhuatymkshk:RelishAgro2025@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres")
 
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable is required")

@@ -13,7 +13,20 @@ from datetime import datetime
 
 # Import database and routes
 from database import init_db, test_connection
-from routes import auth, admin, workers, job_types, provisions, onboarding, attendance, face_recognition, gps_tracking, supervisor, yields
+from routes import (
+    auth, 
+    admin, 
+    workers, 
+    job_types, 
+    provisions, 
+    onboarding, 
+    attendance, 
+    face_recognition, 
+    face_integration,  # ✅ ADDED
+    gps_tracking, 
+    supervisor, 
+    yields
+)
 
 # Configure logging
 logging.basicConfig(
@@ -53,7 +66,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="RelishAgro Backend API",
-    description="Complete RelishAgro management system with mobile compatibility",
+    description="Complete RelishAgro management system with mobile compatibility and face recognition",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -113,10 +126,11 @@ async def root():
         "message": "RelishAgro Backend API",
         "version": "1.0.0",
         "status": "running",
-        "docs": "/docs"
+        "docs": "/docs",
+        "features": ["Face Recognition", "Attendance", "GPS Tracking", "Onboarding"]
     }
 
-# ✅ CORRECTED ROUTER REGISTRATION
+# ✅ COMPLETE ROUTER REGISTRATION
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(admin.router, prefix="/api", tags=["Admin"])
 app.include_router(workers.router, prefix="/api/workers", tags=["Workers"])
@@ -125,6 +139,7 @@ app.include_router(provisions.router, prefix="/api/provisions", tags=["Provision
 app.include_router(onboarding.router, prefix="/api/onboarding", tags=["Onboarding"])
 app.include_router(attendance.router, prefix="/api", tags=["Attendance"])
 app.include_router(face_recognition.router, prefix="/api", tags=["Face Recognition"])
+app.include_router(face_integration.router, tags=["Face Integration"])  # ✅ ADDED - No prefix, uses internal prefix
 app.include_router(gps_tracking.router, prefix="/api", tags=["GPS Tracking"])
 app.include_router(supervisor.router, prefix="/api", tags=["Supervisor"])
 app.include_router(yields.router, prefix="/api", tags=["Yields"])
